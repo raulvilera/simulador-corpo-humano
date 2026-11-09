@@ -25,7 +25,7 @@
   const controles = new T.OrbitControls(camera, renderer.domElement);
   controles.target.set(0, 9.2, 0);
   controles.enableDamping = true; controles.dampingFactor = 0.08;
-  controles.minDistance = 2.5; controles.maxDistance = 70;
+  controles.minDistance = 0.4; controles.maxDistance = 70;
 
   // iluminação de estúdio: ambiente refletido (PBR) + luzes de recorte
   try { const pm = new T.PMREMGenerator(renderer); cena.environment = pm.fromScene(new T.RoomEnvironment(), 0.04).texture; } catch (e) { }
@@ -178,14 +178,16 @@
   });
   $("#btnTela").addEventListener("click", () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else document.exitFullscreen(); });
 
+  // uma malha "pertence" a um id se for a própria estrutura ou parte do órgão (ex.: córnea → olho)
+  const pertence = (m, id) => m.userData.id === id || (D.estruturas[m.userData.id] && D.estruturas[m.userData.id].orgao === id);
   function focar(id) {
     const caixa = new T.Box3();
     let ok = false;
-    pecas.forEach(m => { if (m.userData.id === id && visivelDeFato(m)) { caixa.expandByObject(m); ok = true; } });
-    if (!ok) pecas.forEach(m => { if (m.userData.id === id) { caixa.expandByObject(m); ok = true; } });
+    pecas.forEach(m => { if (pertence(m, id) && visivelDeFato(m)) { caixa.expandByObject(m); ok = true; } });
+    if (!ok) pecas.forEach(m => { if (pertence(m, id)) { caixa.expandByObject(m); ok = true; } });
     if (!ok) return;
     const c = caixa.getCenter(new T.Vector3()); const tam = caixa.getSize(new T.Vector3()).length();
-    const dist = Math.min(Math.max(tam * 2.2, 4), 40);
+    const dist = Math.min(Math.max(tam * 2.2, 1.2), 40);
     const dir = camera.position.clone().sub(controles.target).normalize();
     if (Math.abs(dir.y) > 0.8) dir.set(0, 0.2, 1).normalize();
     voarPara(c, c.clone().add(dir.multiplyScalar(dist)));
@@ -219,13 +221,13 @@
   let realceHover = null;
   function realcar(id, cor, intens) {
     pecas.concat(importados).forEach(m => {
-      if (m.userData.id !== id || !m.material || !m.material.emissive) return;
+      if (!pertence(m, id) || !m.material || !m.material.emissive) return;
       m.material.emissive.setHex(cor); m.material.emissiveIntensity = intens;
     });
   }
   function limparRealce(id) {
     if (!id) return;
-    pecas.concat(importados).forEach(m => { if (m.userData.id === id && m.material && m.material.emissive) { m.material.emissive.setHex(0); } });
+    pecas.concat(importados).forEach(m => { if (pertence(m, id) && m.material && m.material.emissive) { m.material.emissive.setHex(0); } });
   }
   let ultimoMove = 0;
   renderer.domElement.addEventListener("pointermove", ev => {
@@ -281,7 +283,7 @@
       return p && p.sistemas.includes(sist) && a.preset !== "tudo";
     }).map(h => h.codigo);
   }
-  function mostrarInfo(id, obj) {
+  function mostrarInfo(id, obj, daLupa) {
     trocarAba("explorar");
     const e = D.estruturas[id];
     if (!e) {
@@ -299,25 +301,35 @@
         ${e.curiosidade ? `<div class="destaque curioso"><b>Você sabia?</b> ${e.curiosidade}</div>` : ""}
         ${e.saude ? `<div class="destaque saude"><b>Saúde e prevenção:</b> ${e.saude}</div>` : ""}
         ${cods.length ? `<h4>Habilidades BNCC relacionadas</h4><div class="chips">${cods.map(c => `<button class="chip" data-bncc="${c}">${c}</button>`).join("")}</div>` : ""}
+        ${e.orgao && D.estruturas[e.orgao] ? `<p class="mini-txt muted">Faz parte de: <a href="#" id="lnkOrgao">${D.estruturas[e.orgao].nome}</a></p>` : ""}
         <div class="acoes">
-          <button class="btn" id="btnFocar">🔍 Aproximar</button>
+          ${lupaDe(id) && !daLupa ? `<button class="btn destaque-btn" id="btnLupaInfo">🔬 Ver em detalhe</button>` : ""}
+          ${e.soLupa ? "" : `<button class="btn" id="btnFocar">🔍 Aproximar</button>`}
           <button class="btn" id="btnOuvir">🔊 Ouvir</button>
           <button class="btn" id="btnIsolar">◎ Isolar sistema</button>
         </div>
       </div>
       <div class="cartao pequeno"><h4>Sobre o sistema ${s.nome}</h4><p>${s.descricao}</p></div>`;
-    $("#btnFocar").onclick = () => focar(id);
+    if ($("#btnFocar")) $("#btnFocar").onclick = () => { if (window.LUPA) LUPA.fechar(); focar(id); };
+    if ($("#btnLupaInfo")) $("#btnLupaInfo").onclick = () => LUPA.abrir(lupaDe(id), id);
+    if ($("#lnkOrgao")) $("#lnkOrgao").onclick = ev => { ev.preventDefault(); daLupa ? LUPA.abrir(lupaDe(id), e.orgao) : selecionar(e.orgao, true); };
     $("#btnOuvir").onclick = () => falar(`${e.nome}. ${e.funcao} ${e.desc} ${e.curiosidade || ""}`);
     $("#btnIsolar").onclick = () => { Object.keys(D.sistemas).forEach(x => est.visivel[x] = x === e.sistema); if (est.opac[e.sistema] < 0.3) est.opac[e.sistema] = 1; aplicarTudo(); };
     painelInfo.querySelectorAll("[data-bncc]").forEach(b => b.onclick = () => { trocarAba("bncc"); destacarBNCC(b.dataset.bncc); });
+  }
+  function lupaDe(id) {
+    const e = D.estruturas[id]; if (!e || !window.LUPA) return null;
+    if (e.lupa) return e.lupa; if (e.orgao && D.estruturas[e.orgao]) return D.estruturas[e.orgao].lupa || null; return null;
   }
   function mostrarSistema(id) {
     const s = D.sistemas[id];
     const estr = Object.entries(D.estruturas).filter(([, e]) => e.sistema === id);
     trocarAba("explorar");
     painelInfo.innerHTML = `<div class="cartao"><div class="etiqueta" style="--c:${s.cor}">Sistema</div><h2>${s.nome}</h2><p>${s.descricao}</p>
-      <h4>Estruturas (clique para localizar)</h4><div class="chips">${estr.map(([k, e]) => `<button class="chip" data-estr="${k}">${e.nome}</button>`).join("")}</div></div>`;
+      <h4>Estruturas (clique para localizar)</h4><div class="chips">${estr.filter(([, e]) => !e.soLupa).map(([k, e]) => `<button class="chip" data-estr="${k}">${e.nome}</button>`).join("")}</div>
+      ${estr.some(([, e]) => e.soLupa) ? `<h4>🔬 Vistas ampliadas (Lupa dos sentidos)</h4><div class="chips">${estr.filter(([, e]) => e.soLupa).map(([k, e]) => `<button class="chip" data-lupa-estr="${k}">${e.nome}</button>`).join("")}</div>` : ""}</div>`;
     painelInfo.querySelectorAll("[data-estr]").forEach(b => b.onclick = () => selecionar(b.dataset.estr, true));
+    painelInfo.querySelectorAll("[data-lupa-estr]").forEach(b => b.onclick = () => LUPA.abrir(lupaDe(b.dataset.lupaEstr), b.dataset.lupaEstr));
   }
   function falar(txt) {
     if (!("speechSynthesis" in window)) return;
@@ -356,7 +368,7 @@
   ROT.forEach(id => { const d = el("div", { class: "rotulo" }, D.estruturas[id].nome); camadaRot.appendChild(d); rotEls[id] = d; d.onclick = () => selecionar(id, true); });
   const centrosCache = {};
   function centro(id) {
-    const malhas = pecas.filter(m => m.userData.id === id && visivelDeFato(m));
+    const malhas = pecas.filter(m => pertence(m, id) && visivelDeFato(m));
     if (!malhas.length) return null;
     const c = new T.Box3(); malhas.slice(0, 6).forEach(m => c.expandByObject(m));
     return c.getCenter(new T.Vector3());
@@ -790,10 +802,10 @@
     const fb = $("#desFeed");
     if (!o) return;
     const id = o.userData.id;
-    if (id === alvo) {
+    if (id === alvo || (D.estruturas[id] && D.estruturas[id].orgao === alvo)) {
       d.pontos += d.tent === 0 ? 1 : 0.5;
-      realcar(id, 0x22ff66, 0.7); setTimeout(() => limparRealce(id), 900);
-      fb.innerHTML = `<div class="destaque saude">✔️ Isso mesmo! ${D.estruturas[id].funcao}</div>`;
+      realcar(alvo, 0x22ff66, 0.7); setTimeout(() => limparRealce(alvo), 900);
+      fb.innerHTML = `<div class="destaque saude">✔️ Isso mesmo! ${D.estruturas[alvo].funcao}</div>`;
       d.i++; setTimeout(rodadaDesafio, 1300);
     } else {
       d.tent++;
@@ -908,7 +920,8 @@
       aplicarTudo(); mostrarSistema(id);
     });
   }
-  window.APP = { aplicarPreset, selecionar, garantirVisivel, trocarAba, voarPara, est, falar };
+  window.APP = { aplicarPreset, selecionar, garantirVisivel, trocarAba, voarPara, est, falar, info: (id, daLupa) => mostrarInfo(id, null, daLupa) };
+  if (window.LUPA) { LUPA.iniciar({ pecas, info: (id, daLupa) => mostrarInfo(id, null, daLupa) }); $("#btnLupa").onclick = () => LUPA.abrir("olho"); }
   redimensionar();
   laco();
   setTimeout(() => $("#carregando").classList.add("some"), 300);

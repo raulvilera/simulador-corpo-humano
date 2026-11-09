@@ -50,10 +50,12 @@ window.construirCorpo = async function (aoProgresso) {
     utero: [0xd2707f, { roughness: 0.4, clearcoat: 0.5 }], vagina: [0xe0909c, { roughness: 0.45 }], tubas: [0xe79fac, { roughness: 0.45 }], ovarios: [0xe9c6c4, { roughness: 0.5 }],
     mamas: [0xf3d2b0, { roughness: 0.55, transparent: true, opacity: 0.32 }], linfonodo: [0x5fb08a, { roughness: 0.5, clearcoat: 0.3 }], vaso_linf: [0x8fd3ae, { roughness: 0.4 }]
   };
+  window.PALETA = PAL;
   function material(id, mat) {
     const chave = mat === id || !mat ? id : id + ":" + mat;
     if (!mats[chave]) {
-      const [cor, extra] = PAL[mat] || PAL[id] || [0xcccccc, {}];
+      const EX = window.SENTIDOS ? SENTIDOS.PAL : {};
+      const [cor, extra] = PAL[mat] || EX[mat] || PAL[id] || [0xcccccc, {}];
       const op = Object.assign({ color: cor, metalness: 0 }, extra);
       if (op.sheenColor !== undefined) op.sheenColor = new T.Color(op.sheenColor);
       const m = new T.MeshPhysicalMaterial(op);
@@ -84,6 +86,8 @@ window.construirCorpo = async function (aoProgresso) {
     g.computeVertexNormals(); g.computeBoundingSphere();
     return g;
   }
+
+  window.decodificarPacote = async p => { const d = await descomprimir(p.dados); return p.cab.map(c => ({ c, geo: geometria(c, d) })); };
 
   /* ------------------------ ORGANIZAÇÃO NA CENA ---------------------------- */
   const subgrupos = { fem: [], masc: [] };
@@ -235,6 +239,22 @@ window.construirCorpo = async function (aoProgresso) {
     const ducto = [...ao.map(p => p.clone().add(V(-0.08, 0, -0.14))), V(0.25, 13.6, -0.3), jE.clone()];
     tubo(ducto, 0.016, "vasos_linfaticos", "linfatico", "vaso_linf");
     ao.filter((p, i) => i % 2 === 0).forEach(p => no(p.clone().add(V(0.14, 0, 0.05)), 0.9));               // para-aórticos
+  })();
+
+  // Orelha média e interna (tamanho real) dentro da cabeça, nos dois lados
+  if (window.SENTIDOS) (function () {
+    const pav = pecas.find(m => m.userData.id === "pavilhao"); if (!pav) return;
+    const p = pav.geometry.attributes.position;
+    [-1, 1].forEach(s => {
+      const cx = new T.Box3(); const v = V(0, 0, 0);
+      for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); if (v.x * s > 0) cx.expandByPoint(v); }
+      if (cx.isEmpty()) return;
+      const ent = V(s < 0 ? cx.max.x - 0.02 : cx.min.x + 0.02, cx.min.y + (cx.max.y - cx.min.y) * 0.42, cx.min.z + (cx.max.z - cx.min.z) * 0.62);
+      const g = SENTIDOS.construirOrelha((id, k) => material(id, k));
+      g.scale.set(0.1 * (s < 0 ? 1 : -1), 0.1, 0.1); g.position.copy(ent).add(V(-s * 0.255, 0, 0));
+      g.traverse(o => { if (o.isMesh && o.userData.id) registrar(o, o.userData.id, "sensorial"); });
+      grupos.sensorial.add(g);
+    });
   })();
 
   /* ------------------------------ TRAJETOS -------------------------------- */

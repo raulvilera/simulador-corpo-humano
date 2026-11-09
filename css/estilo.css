@@ -234,3 +234,29 @@ hr { border: 0; border-top: 1px solid var(--borda); margin: 14px 0; }
   .ajuda-gestos { display: none; }
 }
 @media (max-width: 560px) { .grupo-f button { padding: 5px 7px; font-size: .74rem; } .topo { gap: 8px; padding: 0 8px; } .aba { padding: 7px 8px; font-size: .82rem; } }
+
+/* ---------- Lupa dos sentidos ---------- */
+#lupa { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: inherit; }
+#lupa[hidden] { display: none; }
+.lupa-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; background: var(--card); border-bottom: 1px solid var(--borda); }
+.lupa-titulo { font-size: .95rem; margin-right: 4px; }
+.lupa-abas, .lupa-acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.lupa-acoes { margin-left: auto; }
+.lupa-topo button { border: 1px solid var(--borda); background: var(--card2); padding: 5px 10px; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: .82rem; }
+.lupa-topo button.ativo, .lupa-topo button:hover { border-color: var(--acento); color: var(--acento); }
+.lupa-corpo { flex: 1 1 auto; display: grid; grid-template-columns: 210px 1fr; min-height: 0; }
+.lupa-lista { overflow: auto; padding: 10px; background: color-mix(in srgb, var(--card) 88%, transparent); border-right: 1px solid var(--borda); }
+.lupa-lista h4 { margin-top: 0; }
+.lupa-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.lupa-item button { flex: 1; text-align: left; border: 1px solid transparent; background: none; padding: 3px 6px; border-radius: 7px; cursor: pointer; font-size: .8rem; font-weight: 600; }
+.lupa-item button:hover, .lupa-item button.ativo { border-color: var(--acento); color: var(--acento); }
+.lupa-palco { position: relative; min-height: 0; overflow: hidden; }
+.lupa-palco canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }
+#lupaRotulos { position: absolute; inset: 0; pointer-events: none; }
+.lupa-carga { position: absolute; inset: 0; display: grid; place-content: center; font-weight: 800; color: var(--muted); }
+.lupa-carga[hidden], #lupaRotulos[hidden] { display: none; }
+.lupa-demo { flex: 0 0 auto; padding: 8px 12px; background: var(--card); border-top: 1px solid var(--borda); max-height: 34%; overflow: auto; }
+.lupa-demo:empty { display: none; }
+.lupa-demo-tit { font-weight: 800; margin-bottom: 6px; }
+.destaque-btn { border-color: var(--acento); color: var(--acento); }
+@media (max-width: 760px) { .lupa-corpo { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .lupa-lista { order: 2; max-height: 130px; border-right: 0; border-top: 1px solid var(--borda); } .lupa-acoes { margin-left: 0; } }
