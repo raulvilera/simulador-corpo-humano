@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Corpo Humano 3D — Simulador BNCC</title>
+  <meta name="description" content="Simulador 3D interativo do corpo humano, em português, alinhado à BNCC para o Ensino Fundamental e Médio.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/estilo.css">
+</head>
+<body class="painel-aberto">
+  <div id="carregando"><div class="pulso">❤</div><p>Montando o corpo humano…</p></div>
+
+  <header class="topo">
+    <button class="icone so-movel" id="btnPainelSis" title="Sistemas">☰</button>
+    <div class="marca"><span class="logo">🫀</span><div><h1>Corpo Humano 3D</h1><small>Simulador didático · BNCC</small></div></div>
+    <nav class="abas" role="tablist">
+      <button class="aba ativo" data-aba="explorar">🔍 Explorar</button>
+      <button class="aba" data-aba="simular">⚙️ Simular</button>
+      <button class="aba" data-aba="bncc">📚 BNCC</button>
+      <button class="aba" data-aba="quiz">📝 Quiz</button>
+      <button class="aba" data-aba="desafio">🎯 Desafio</button>
+      <button class="aba" data-aba="saiba">📖 Saiba mais</button>
+    </nav>
+    <div class="busca-wrap">
+      <input id="busca" type="search" placeholder="Buscar órgão ou osso…" autocomplete="off" aria-label="Buscar estrutura">
+      <div id="sugestoes" hidden></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="lateral" id="lateral">
+      <section>
+        <h3>Visualização</h3>
+        <label class="rotulo-campo">Atalhos por tema
+          <select id="preset"></select>
+        </label>
+        <div class="seg">
+          <button data-sexo="feminino" class="ativo">♀ Feminino</button>
+          <button data-sexo="masculino">♂ Masculino</button>
+        </div>
+      </section>
+      <section>
+        <h3>Sistemas <small class="muted">(liga/desliga · transparência)</small></h3>
+        <div id="listaSistemas"></div>
+      </section>
+      <section>
+        <h3>Corte anatômico</h3>
+        <div class="linha2">
+          <select id="corteTipo">
+            <option value="nenhum">Sem corte</option>
+            <option value="sagital">Plano sagital</option>
+            <option value="coronal">Plano coronal (frontal)</option>
+            <option value="transversal">Plano transversal</option>
+          </select>
+        </div>
+        <input type="range" id="corteVal" min="-100" max="100" value="0" aria-label="Posição do corte">
+      </section>
+      <section>
+        <h3>Modelo científico</h3>
+        <label class="btn arquivo">📂 Importar modelo .glb
+          <input type="file" id="arquivoGlb" accept=".glb,.gltf" hidden>
+        </label>
+        <p class="muted mini-txt">Compare com atlas abertos como Z-Anatomy ou BodyParts3D (exporte em .glb).</p>
+      </section>
+    </aside>
+
+    <section class="palco-wrap">
+      <div id="palco"></div>
+      <div id="rotulos" hidden></div>
+      <div class="ferramentas">
+        <div class="grupo-f">
+          <button data-vista="frente" title="Vista anterior">Frente</button>
+          <button data-vista="costas" title="Vista posterior">Costas</button>
+          <button data-vista="lado" title="Vista lateral">Lado</button>
+        </div>
+        <div class="grupo-f">
+          <button data-vista="cabeca">Cabeça</button>
+          <button data-vista="torax">Tórax</button>
+          <button data-vista="abdome">Abdome</button>
+          <button data-vista="pelve">Pelve</button>
+          <button data-vista="pernas">Pernas</button>
+        </div>
+        <div class="grupo-f">
+          <button id="btnRotulos" title="Mostrar nomes">🏷️ Rótulos</button>
+          <button id="btnGirar" title="Girar automaticamente">⟳ Girar</button>
+          <button id="btnFoto" title="Salvar imagem">📷</button>
+          <button id="btnTela" title="Tela cheia">⛶</button>
+          <button id="btnReset" title="Restaurar">↺</button>
+        </div>
+      </div>
+      <div class="ajuda-gestos">Arraste para girar · roda para zoom · botão direito para mover · clique em uma estrutura</div>
+      <div id="dica" hidden></div>
+      <div id="aviso" hidden></div>
+    </section>
+
+    <aside class="painel" id="painel">
+      <button class="icone fechar-painel so-movel" id="btnFecharPainel" title="Fechar">✕</button>
+      <div class="conteudo-aba" id="aba-explorar"><div id="info"></div></div>
+      <div class="conteudo-aba" id="aba-simular" hidden></div>
+      <div class="conteudo-aba" id="aba-bncc" hidden></div>
+      <div class="conteudo-aba" id="aba-quiz" hidden></div>
+      <div class="conteudo-aba" id="aba-desafio" hidden></div>
+      <div class="conteudo-aba" id="aba-saiba" hidden></div>
+    </aside>
+  </main>
+
+  <div id="modal" hidden>
+    <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+      <header><h2 id="modalTitulo"></h2><button id="modalFechar" class="icone" title="Fechar">✕</button></header>
+      <div id="modalCorpo"></div>
+    </div>
+  </div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/OrbitControls.js"></script>
+  <script src="vendor/GLTFLoader.js"></script>
+  <script src="js/dados.js"></script>
+  <script src="js/modelo3d.js"></script>
+  <script src="js/simulacoes2d.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
