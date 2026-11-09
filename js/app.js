@@ -1,8 +1,9 @@
 /* =========================================================================
    CORPO HUMANO 3D — Aplicação principal
    ========================================================================= */
-(function () {
+(async function () {
   const T = THREE;
+  if (T.ColorManagement) T.ColorManagement.legacyMode = false; // cores em sRGB corretas
   const D = window.DADOS;
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
@@ -26,10 +27,12 @@
   controles.enableDamping = true; controles.dampingFactor = 0.08;
   controles.minDistance = 2.5; controles.maxDistance = 70;
 
-  cena.add(new T.HemisphereLight(0xffffff, 0x445566, 0.75));
-  const luz1 = new T.DirectionalLight(0xffffff, 0.9); luz1.position.set(8, 20, 14); cena.add(luz1);
-  const luz2 = new T.DirectionalLight(0xbcd4ff, 0.45); luz2.position.set(-10, 8, -12); cena.add(luz2);
-  const luz3 = new T.DirectionalLight(0xffe2cc, 0.35); luz3.position.set(0, -4, 10); cena.add(luz3);
+  // iluminação de estúdio: ambiente refletido (PBR) + luzes de recorte
+  try { const pm = new T.PMREMGenerator(renderer); cena.environment = pm.fromScene(new T.RoomEnvironment(), 0.04).texture; } catch (e) { }
+  cena.add(new T.HemisphereLight(0xfff4ee, 0x3a4a5a, 0.45));
+  const luz1 = new T.DirectionalLight(0xfff1e6, 1.25); luz1.position.set(8, 22, 16); cena.add(luz1);
+  const luz2 = new T.DirectionalLight(0xbcd4ff, 0.55); luz2.position.set(-12, 10, -12); cena.add(luz2);
+  const luz3 = new T.DirectionalLight(0xffe2cc, 0.3); luz3.position.set(0, -4, 12); cena.add(luz3);
 
   // base circular
   const base = new T.Mesh(new T.CylinderGeometry(4.2, 4.4, 0.25, 64), new T.MeshStandardMaterial({ color: 0x1d2a44, roughness: 0.8 }));
@@ -37,7 +40,15 @@
   const anel = new T.Mesh(new T.TorusGeometry(4.3, 0.04, 8, 96), new T.MeshBasicMaterial({ color: 0x4cc9f0 }));
   anel.rotation.x = Math.PI / 2; anel.position.y = 0; cena.add(anel);
 
-  const corpo = construirCorpo();
+  const txtCarga = document.querySelector("#carregando p");
+  let corpo;
+  try {
+    corpo = await construirCorpo((f, nome) => { if (txtCarga) txtCarga.textContent = `Carregando modelos anatômicos… ${Math.round(f * 100)}% (${nome})`; });
+  } catch (e) {
+    console.error(e);
+    if (txtCarga) txtCarga.innerHTML = "Não foi possível carregar os modelos 3D.<br><small>Use um navegador atualizado (Chrome, Edge, Firefox ou Safari).</small>";
+    return;
+  }
   cena.add(corpo.raiz);
   const { grupos, pecas, mats, refs } = corpo;
   Object.values(mats).forEach(m => { m.userData.opBase = m.opacity; m.userData.transpBase = m.transparent; });
@@ -519,7 +530,7 @@
     $("#rFr").oninput = e => { est.fr = +e.target.value; atuFr(); };
     $("#chkFumante").onchange = e => {
       const fum = e.target.checked;
-      refs.pulmoes.forEach(p => p.material.color.setHex(fum ? 0x6d5a5e : 0xf49cbb));
+      refs.pulmoes.forEach(p => p.traverse(o => { if (o.isMesh) o.material.color.setHex(fum ? 0x5e4b4f : o.material.userData.corBase.getHex()); }));
       atuFr();
     };
     atuFr();
@@ -618,7 +629,7 @@
     const k = est.flexao / 140;
     const b = refs.biceps, t = refs.triceps;
     if (!b.userData.e0) { b.userData.e0 = b.scale.clone(); t.userData.e0 = t.scale.clone(); }
-    b.scale.set(b.userData.e0.x * (1 + 0.45 * k), b.userData.e0.y * (1 - 0.18 * k), b.userData.e0.z * (1 + 0.5 * k));
+    b.scale.set(b.userData.e0.x * (1 + 0.22 * k), b.userData.e0.y * (1 - 0.1 * k), b.userData.e0.z * (1 + 0.28 * k));
     t.scale.set(t.userData.e0.x * (1 - 0.12 * k), t.userData.e0.y * (1 + 0.05 * k), t.userData.e0.z * (1 - 0.12 * k));
     const vf = $("#vFlex"); if (vf) {
       vf.textContent = Math.round(est.flexao) + "°";
@@ -863,7 +874,7 @@
     faseCor += dt * est.bpm / 60;
     const f = faseCor % 1;
     const bat = f < 0.15 ? Math.sin(f / 0.15 * Math.PI) : (f > 0.25 && f < 0.37 ? 0.45 * Math.sin((f - 0.25) / 0.12 * Math.PI) : 0);
-    refs.coracao.scale.setScalar(1 + 0.09 * bat);
+    refs.coracao.scale.setScalar(1 + 0.06 * bat);
     const vel = 1.2 * est.bpm / 72;
     moverParticulas(partA, dt, vel); moverParticulas(partV, dt, vel * 0.75);
     // respiração
@@ -871,7 +882,7 @@
     const r = Math.sin(faseResp * Math.PI * 2);
     const amp = $("#chkFumante") && $("#chkFumante").checked ? 0.045 : 0.075;
     refs.pulmoes.forEach(p => { const b = p.userData.escalaBase; p.scale.set(b.x * (1 + amp * r), b.y * (1 + amp * 0.6 * r), b.z * (1 + amp * r)); });
-    refs.diafragma.position.y = 10.9 - 0.18 * r; refs.diafragma.scale.y = 0.55 - 0.08 * r;
+    refs.diafragma.position.y = refs.diafragma.userData.posBase.y - 0.12 * r; refs.diafragma.scale.y = 1 - 0.06 * r;
     const vf = document.getElementById("vFase"); if (vf) vf.textContent = r > 0 ? (Math.cos(faseResp * Math.PI * 2) > 0 ? "inspiração" : "expiração") : (Math.cos(faseResp * Math.PI * 2) < 0 ? "expiração" : "inspiração");
     passoDigestao(dt); passoReflexo(dt); passoRim(dt); passoPuberdade(tempo);
     if (fogo.visible) fogo.scale.set(1, 1 + 0.2 * Math.sin(tempo * 20), 1);
