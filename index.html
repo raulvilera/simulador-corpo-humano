@@ -7,7 +7,7 @@
   <meta name="description" content="Simulador 3D interativo do corpo humano, em português, alinhado à BNCC para o Ensino Fundamental e Médio.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/estilo.css">
+  <link rel="stylesheet" href="css/estilo.css?v=3">
 </head>
 <body class="painel-aberto">
   <div id="carregando"><div class="pulso">❤</div><p>Montando o corpo humano…</p></div>
@@ -67,8 +67,6 @@
     </aside>
 
     <section class="palco-wrap">
-      <div id="palco"></div>
-      <div id="rotulos" hidden></div>
       <div class="ferramentas">
         <div class="grupo-f">
           <button data-vista="frente" title="Vista anterior">Frente</button>
@@ -90,6 +88,10 @@
           <button id="btnTela" title="Tela cheia">⛶</button>
           <button id="btnReset" title="Restaurar">↺</button>
         </div>
+      </div>
+      <div class="palco-area">
+        <div id="palco"></div>
+        <div id="rotulos" hidden></div>
       </div>
       <div class="ajuda-gestos">Arraste para girar · roda para zoom · botão direito para mover · clique em uma estrutura</div>
       <div id="dica" hidden></div>
@@ -132,10 +134,11 @@
   <script src="modelos/modelo_endocrino.js"></script>
   <script src="modelos/modelo_linfatico.js"></script>
   <script src="modelos/modelo_reprodutor.js"></script>
-  <script src="js/dados.js"></script>
-  <script src="js/sentidos.js"></script>
-  <script src="js/modelo3d.js"></script>
-  <script src="js/simulacoes2d.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/dados.js?v=3"></script>
+  <script src="js/imagens.js?v=3"></script>
+  <script src="js/sentidos.js?v=3"></script>
+  <script src="js/modelo3d.js?v=3"></script>
+  <script src="js/simulacoes2d.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>

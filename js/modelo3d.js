@@ -220,6 +220,128 @@ window.construirCorpo = async function (aoProgresso) {
     const m = new T.Mesh(geo, material("abdominal", "musculo")); registrar(m, "abdominal", "muscular"); grupos.muscular.add(m);
   })();
 
+  // Músculos da face (mímica e mastigação), moldados sobre o crânio, olhos e nariz reais
+  (function () {
+    const BASE = ["cranio", "mandibula", "palpebras", "esclera", "cartilagens_nasais"];
+    const fontes = pecas.filter(m => BASE.includes(m.userData.id) && m.parent && !m.parent.userData.pivo);
+    if (!fontes.some(m => m.userData.id === "cranio")) return;
+    // Mapa de altura: para cada (a,b) guarda a maior "altura" da superfície (rasterização dos triângulos)
+    function mapa(a0, a1, b0, b1, R, proj) {
+      const NA = Math.round((a1 - a0) / R) + 1, NB = Math.round((b1 - b0) / R) + 1;
+      let H = new Float32Array(NA * NB).fill(-Infinity);
+      const A = [0, 0, 0], B = [0, 0, 0], Z = [0, 0, 0];
+      fontes.forEach(m => {
+        const p = m.geometry.attributes.position, I = m.geometry.index.array;
+        for (let t = 0; t < I.length; t += 3) {
+          let ok = true;
+          for (let k = 0; k < 3; k++) { const r = proj(p.getX(I[t + k]), p.getY(I[t + k]), p.getZ(I[t + k])); if (!r) { ok = false; break; } A[k] = r[0]; B[k] = r[1]; Z[k] = r[2]; }
+          if (!ok) continue;
+          const d = (B[1] - B[2]) * (A[0] - A[2]) + (A[2] - A[1]) * (B[0] - B[2]); if (Math.abs(d) < 1e-12) continue;
+          const i0 = Math.max(0, Math.ceil((Math.min(A[0], A[1], A[2]) - a0) / R)), i1 = Math.min(NA - 1, Math.floor((Math.max(A[0], A[1], A[2]) - a0) / R));
+          const j0 = Math.max(0, Math.ceil((Math.min(B[0], B[1], B[2]) - b0) / R)), j1 = Math.min(NB - 1, Math.floor((Math.max(B[0], B[1], B[2]) - b0) / R));
+          for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+            const pa = a0 + i * R, pb = b0 + j * R;
+            const l1 = ((B[1] - B[2]) * (pa - A[2]) + (A[2] - A[1]) * (pb - B[2])) / d, l2 = ((B[2] - B[0]) * (pa - A[2]) + (A[0] - A[2]) * (pb - B[2])) / d, l3 = 1 - l1 - l2;
+            if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+            const z = l1 * Z[0] + l2 * Z[1] + l3 * Z[2], q = j * NA + i; if (z > H[q]) H[q] = z;
+          }
+        }
+      });
+      // preenche buracos (boca, abertura nasal, bordas) com a média dos vizinhos
+      for (let it = 0; it < 80; it++) {
+        const N2 = H.slice(); let falta = false;
+        for (let j = 0; j < NB; j++) for (let i = 0; i < NA; i++) {
+          const q = j * NA + i; if (H[q] > -Infinity) continue;
+          let s = 0, n = 0;
+          for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const jj = j + dj, ii = i + di; if (jj < 0 || ii < 0 || jj >= NB || ii >= NA) continue; const v = H[jj * NA + ii]; if (v > -Infinity) { s += v; n++; } }
+          if (n) N2[q] = s / n - R * 0.5; else falta = true;
+        }
+        H = N2; if (!falta) break;
+      }
+      const borrar = (X, n) => { for (let k = 0; k < n; k++) { const Y = X.slice(); for (let j = 1; j < NB - 1; j++) for (let i = 1; i < NA - 1; i++) { let s = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) s += X[(j + dj) * NA + i + di]; Y[j * NA + i] = s / 9; } X = Y; } return X; };
+      // "fechamento": cobre concavidades (órbitas, dentes) como faria o tecido mole
+      const L = borrar(H, 4); for (let q = 0; q < H.length; q++) H[q] = Math.max(H[q], L[q]);
+      H = borrar(H, 2);
+      const amostra = (a, b) => {
+        const fa = Math.min(NA - 1.001, Math.max(0, (a - a0) / R)), fb = Math.min(NB - 1.001, Math.max(0, (b - b0) / R));
+        const i = Math.floor(fa), j = Math.floor(fb), u = fa - i, v = fb - j, q = j * NA + i;
+        return H[q] * (1 - u) * (1 - v) + H[q + 1] * u * (1 - v) + H[q + NA] * (1 - u) * v + H[q + NA + 1] * u * v;
+      };
+      return (a, b) => {   // altura + normal (no espaço do mapa)
+        const h = amostra(a, b), e = R * 1.5;
+        const ga = (amostra(a + e, b) - amostra(a - e, b)) / (2 * e), gb = (amostra(a, b + e) - amostra(a, b - e)) / (2 * e);
+        const l = Math.hypot(ga, gb, 1); return [h, -ga / l, -gb / l, 1 / l];
+      };
+    }
+    const frente = mapa(-0.95, 0.95, 14.85, 17.25, 0.015, (x, y, z) => [x, y, z]);
+    const lado = { 1: mapa(-0.6, 0.8, 14.9, 16.4, 0.015, (x, y, z) => x > 0 ? [z, y, x] : null), [-1]: mapa(-0.6, 0.8, 14.9, 16.4, 0.015, (x, y, z) => x < 0 ? [z, y, -x] : null) };
+
+    // Gera uma "almofada" muscular: superfície externa (com estrias das fibras) + interna, coladas na borda
+    function musculo(id, s, ponto, o) {
+      const NU = o.nu || 28, NV = o.nv || 22, pos = [], idx = [];
+      const camada = o.camada || 0.008, esp = o.esp || 0.04;
+      const mundo = (a, b, off) => {
+        if (o.lado) { const [h, na, nb, nh] = lado[s](a, b); return [s * (h + nh * off), b + nb * off, a + na * off]; }
+        const x = s * a, [h, na, nb, nh] = frente(x, b); return [x + na * off, b + nb * off, h + nh * off];
+      };
+      for (let f = 0; f < 2; f++) for (let j = 0; j <= NV; j++) for (let i = 0; i <= NU; i++) {
+        const u = i / NU, v = j / NV, [a, b, perfil, fibra] = ponto(u, v);
+        const estria = 1 - (o.estrias === 0 ? 0 : 0.18) * Math.pow(Math.abs(Math.sin(Math.PI * fibra * (o.nf || 7))), 3);
+        pos.push(...mundo(a, b, f ? camada : camada + esp * perfil * estria));
+      }
+      const n1 = (NU + 1) * (NV + 1), id_ = (f, i, j) => f * n1 + j * (NU + 1) + i;
+      for (let j = 0; j < NV; j++) for (let i = 0; i < NU; i++) {
+        const a = id_(0, i, j), b = id_(0, i + 1, j), c = id_(0, i + 1, j + 1), d = id_(0, i, j + 1);
+        idx.push(a, b, c, a, c, d);
+        idx.push(a + n1, c + n1, b + n1, a + n1, d + n1, c + n1);
+      }
+      const geo = new T.BufferGeometry(); geo.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+      // garante que a face externa aponte para fora (para frente / para o lado)
+      const k = id_(0, NU >> 1, NV >> 1), nrm = geo.attributes.normal;
+      const fora = o.lado ? nrm.getX(k) * s : nrm.getZ(k);
+      if (fora < 0) { for (let t = 0; t < idx.length; t += 3) { const x = idx[t + 1]; idx[t + 1] = idx[t + 2]; idx[t + 2] = x; } geo.setIndex(idx); geo.computeVertexNormals(); }
+      const m = new T.Mesh(geo, material(id, "musculo")); registrar(m, id, "muscular"); grupos.muscular.add(m); return m;
+    }
+    const liso = (t, p) => Math.pow(Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, t)))), p);
+    // faixa (músculo em fita) ao longo de uma curva de Bézier quadrática
+    const faixa = (id, P0, P1, w0, w1, o) => [1, -1].forEach(s => musculo(id, s, (u, v) => {
+      const C = o && o.c || [(P0[0] + P1[0]) / 2, (P0[1] + P1[1]) / 2], k = 1 - v;
+      const a = k * k * P0[0] + 2 * k * v * C[0] + v * v * P1[0], b = k * k * P0[1] + 2 * k * v * C[1] + v * v * P1[1];
+      let ta = 2 * k * (C[0] - P0[0]) + 2 * v * (P1[0] - C[0]), tb = 2 * k * (C[1] - P0[1]) + 2 * v * (P1[1] - C[1]); const l = Math.hypot(ta, tb); ta /= l; tb /= l;
+      const w = (w0 + (w1 - w0) * v) * (u - 0.5);
+      return [a - tb * w, b + ta * w, liso(u, 0.55) * liso(v, (o && o.ponta) || 0.35), u];
+    }, o || {}));
+    // anel (músculos orbiculares)
+    const anel = (id, cx, cy, ri, re, o) => [1, -1].forEach(s => musculo(id, s, (u, v) => {
+      const ang = u * Math.PI * 2, rx = ri[0] + (re[0] - ri[0]) * v, ry = ri[1] + (re[1] - ri[1]) * v;
+      return [cx + Math.cos(ang) * rx, cy + Math.sin(ang) * ry, liso(Math.pow(v, (o && o.lab) || 1), 0.6), v];
+    }, Object.assign({ nu: 64, nv: 12, nf: 5 }, o || {})));
+
+    // Ventre frontal do occipitofrontal (testa) — fibras verticais
+    faixa("frontal", [0.29, 16.13], [0.27, 16.98], 0.5, 0.44, { esp: 0.035, camada: 0.006, ponta: 0.6, nf: 9, nu: 34, nv: 26 });
+    // Prócero e nasal
+    faixa("nasal_m", [0.045, 15.96], [0.03, 16.3], 0.075, 0.07, { esp: 0.025, camada: 0.006, nf: 3 });
+    faixa("nasal_m", [0.135, 15.64], [0.025, 15.86], 0.07, 0.06, { esp: 0.022, camada: 0.004, nf: 4, c: [0.12, 15.8] });
+    // Orbicular do olho (em volta da pálpebra)
+    anel("orbicular_olho", 0.295, 15.965, [0.15, 0.11], [0.31, 0.255], { esp: 0.035, camada: 0.012, nf: 6 });
+    // Levantadores do lábio superior e zigomáticos
+    faixa("levantador_labio", [0.09, 16.02], [0.14, 15.5], 0.05, 0.06, { esp: 0.028, camada: 0.008, c: [0.12, 15.75], nf: 4 });
+    faixa("levantador_labio", [0.26, 15.83], [0.15, 15.46], 0.13, 0.07, { esp: 0.035, camada: 0.012, nf: 5 });
+    faixa("zigomatico", [0.4, 15.79], [0.18, 15.45], 0.06, 0.05, { esp: 0.03, camada: 0.016, nf: 3 });
+    faixa("zigomatico", [0.55, 15.73], [0.215, 15.37], 0.085, 0.065, { esp: 0.045, camada: 0.02, c: [0.42, 15.52], nf: 4 });
+    // Bucinador (profundo, bochecha) e risório
+    faixa("bucinador", [0.47, 15.36], [0.22, 15.36], 0.2, 0.12, { esp: 0.03, camada: 0.004, nf: 6, ponta: 0.25 });
+    faixa("risorio", [0.53, 15.28], [0.22, 15.345], 0.06, 0.035, { esp: 0.02, camada: 0.03, nf: 3 });
+    // Orbicular da boca (lábios)
+    anel("orbicular_boca", 0, 15.36, [0.115, 0.016], [0.25, 0.165], { esp: 0.075, camada: 0.012, lab: 0.55, nf: 7 });
+    // Depressores e mentual (queixo)
+    faixa("depressores_labio", [0.215, 15.31], [0.29, 15.05], 0.05, 0.17, { esp: 0.03, camada: 0.014, nf: 5 });
+    faixa("depressores_labio", [0.09, 15.25], [0.15, 15.05], 0.07, 0.11, { esp: 0.03, camada: 0.01, nf: 4 });
+    faixa("mentual", [0.035, 15.22], [0.06, 15.03], 0.065, 0.07, { esp: 0.035, camada: 0.008, nf: 3 });
+    // Masseter (lateral: do arco zigomático ao ângulo da mandíbula)
+    faixa("masseter", [0.17, 15.82], [0.03, 15.17], 0.38, 0.32, { lado: true, esp: 0.11, camada: 0.006, ponta: 0.3, nf: 8, nu: 30, nv: 26 });
+  })();
+
   // Linfonodos e vasos linfáticos (ao longo das veias reais)
   (function () {
     const no = (p, s) => { const m = new T.Mesh(new T.SphereGeometry(0.055 * (s || 1), 14, 10), material("linfonodos", "linfonodo")); m.scale.set(1.2, 0.8, 0.9); m.position.copy(p); registrar(m, "linfonodos", "linfatico"); grupos.linfatico.add(m); };

@@ -58,7 +58,7 @@
     selecionado: null, opac: {}, visivel: {}, sexo: "feminino",
     bpm: 72, fr: 14, fluxo: true, girar: false,
     digest: null, reflexo: null, flexao: 0, hidrat: 2, bexiga: 0.25, idade: 14,
-    rotulos: false, modo: "explorar", desafio: null, puberdadeAtiva: false
+    rotulos: false, vistaInteira: "frente", modo: "explorar", desafio: null, puberdadeAtiva: false
   };
   Object.keys(D.sistemas).forEach(s => { est.opac[s] = 1; est.visivel[s] = true; });
   est.opac.tegumentar = 0.18;
@@ -66,9 +66,23 @@
   /* --------------------------- REDIMENSIONAR ---------------------------- */
   function redimensionar() {
     const w = palco.clientWidth, h = palco.clientHeight;
+    if (!w || !h) return;
     renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+    if (est.vistaInteira) { const v = vistaInteira(est.vistaInteira); controles.target.copy(v[0]); camera.position.copy(v[1]); anim = null; }
   }
   window.addEventListener("resize", redimensionar);
+  if (window.ResizeObserver) new ResizeObserver(redimensionar).observe(palco);
+
+  // Enquadra o corpo inteiro (da cabeça aos pés, com os braços) conforme o tamanho da área 3D.
+  const DIRECOES = { frente: [0, 1], costas: [0, -1], lado: [1, 0] };
+  function vistaInteira(nome) {
+    const meiaAlt = 9.3, meiaLarg = 4.4, cy = 8.75, profundidade = 1.6;
+    const tanV = Math.tan(T.MathUtils.degToRad(camera.fov / 2));
+    const dist = Math.max(meiaAlt / tanV, meiaLarg / (tanV * camera.aspect)) * 1.08 + profundidade;
+    const [dx, dz] = DIRECOES[nome] || DIRECOES.frente;
+    return [new T.Vector3(0, cy, 0), new T.Vector3(dx * dist, cy + 0.8, dz * dist)];
+  }
+  function verCorpoInteiro(nome, dur) { est.vistaInteira = nome || "frente"; const v = vistaInteira(est.vistaInteira); voarPara(v[0], v[1], dur); }
 
   /* ---------------------------- OPACIDADE ------------------------------- */
   function aplicarOpacidade(sist) {
@@ -166,11 +180,15 @@
     anim = { t: 0, dur: dur || 0.9, a0: controles.target.clone(), a1: alvo.clone(), p0: camera.position.clone(), p1: pos.clone() };
   }
   const VISTAS = {
-    frente: [[0, 9.2, 0], [0, 10.5, 27]], costas: [[0, 9.2, 0], [0, 10.5, -27]], lado: [[0, 9.2, 0], [27, 10.5, 0]],
     cabeca: [[0, 16.2, 0], [0, 16.6, 7.5]], torax: [[0, 12.4, 0], [0, 12.8, 11]], abdome: [[0, 9.6, 0], [0, 10, 10]],
     pelve: [[0, 8.2, 0], [0, 8.6, 8]], pernas: [[0, 4.5, 0], [0, 5, 20]]
   };
-  $$("[data-vista]").forEach(b => b.addEventListener("click", () => { const v = VISTAS[b.dataset.vista]; voarPara(new T.Vector3(...v[0]), new T.Vector3(...v[1])); }));
+  $$("[data-vista]").forEach(b => b.addEventListener("click", () => {
+    const nome = b.dataset.vista;
+    if (DIRECOES[nome]) return verCorpoInteiro(nome);
+    const v = VISTAS[nome]; est.vistaInteira = null; voarPara(new T.Vector3(...v[0]), new T.Vector3(...v[1]));
+  }));
+  controles.addEventListener("start", () => { est.vistaInteira = null; });
   $("#btnGirar").addEventListener("click", e => { est.girar = !est.girar; e.currentTarget.classList.toggle("ativo", est.girar); });
   $("#btnFoto").addEventListener("click", () => {
     renderer.render(cena, camera);
@@ -190,6 +208,7 @@
     const dist = Math.min(Math.max(tam * 2.2, 1.2), 40);
     const dir = camera.position.clone().sub(controles.target).normalize();
     if (Math.abs(dir.y) > 0.8) dir.set(0, 0.2, 1).normalize();
+    est.vistaInteira = null;
     voarPara(c, c.clone().add(dir.multiplyScalar(dist)));
   }
 
@@ -292,10 +311,15 @@
     }
     const s = D.sistemas[e.sistema];
     const cods = bnccDoSistema(e.sistema);
+    const img = (window.IMAGENS || {})[id];
     painelInfo.innerHTML = `
       <div class="cartao">
         <div class="etiqueta" style="--c:${s.cor}">${s.nome}</div>
         <h2>${e.nome}</h2>
+        ${img ? `<figure class="foto-real">
+          <button class="foto-zoom" id="btnFotoReal" title="Ampliar imagem"><img src="${img.src}" alt="${e.nome} — imagem anatômica real" loading="lazy"></button>
+          <figcaption>Imagem real: ${escaparHTML(img.autor)} · <a href="${img.fonte}" target="_blank" rel="noopener">${escaparHTML(img.licenca || "Wikimedia Commons")}</a></figcaption>
+        </figure>` : ""}
         <h4>Função</h4><p>${e.funcao}</p>
         <h4>Como é</h4><p>${e.desc}</p>
         ${e.curiosidade ? `<div class="destaque curioso"><b>Você sabia?</b> ${e.curiosidade}</div>` : ""}
@@ -310,12 +334,32 @@
         </div>
       </div>
       <div class="cartao pequeno"><h4>Sobre o sistema ${s.nome}</h4><p>${s.descricao}</p></div>`;
+    if ($("#btnFotoReal")) $("#btnFotoReal").onclick = () => abrirFotoReal(e.nome, img);
     if ($("#btnFocar")) $("#btnFocar").onclick = () => { if (window.LUPA) LUPA.fechar(); focar(id); };
     if ($("#btnLupaInfo")) $("#btnLupaInfo").onclick = () => LUPA.abrir(lupaDe(id), id);
     if ($("#lnkOrgao")) $("#lnkOrgao").onclick = ev => { ev.preventDefault(); daLupa ? LUPA.abrir(lupaDe(id), e.orgao) : selecionar(e.orgao, true); };
     $("#btnOuvir").onclick = () => falar(`${e.nome}. ${e.funcao} ${e.desc} ${e.curiosidade || ""}`);
     $("#btnIsolar").onclick = () => { Object.keys(D.sistemas).forEach(x => est.visivel[x] = x === e.sistema); if (est.opac[e.sistema] < 0.3) est.opac[e.sistema] = 1; aplicarTudo(); };
     painelInfo.querySelectorAll("[data-bncc]").forEach(b => b.onclick = () => { trocarAba("bncc"); destacarBNCC(b.dataset.bncc); });
+  }
+  function escaparHTML(t) { return String(t || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+  function abrirFotoReal(nome, img) {
+    let caixa = $("#fotoRealCaixa");
+    if (!caixa) {
+      caixa = document.createElement("div");
+      caixa.id = "fotoRealCaixa";
+      caixa.className = "foto-caixa";
+      caixa.addEventListener("click", ev => { if (ev.target === caixa || ev.target.closest(".foto-fechar")) caixa.hidden = true; });
+      document.addEventListener("keydown", ev => { if (ev.key === "Escape") caixa.hidden = true; });
+      document.body.appendChild(caixa);
+    }
+    caixa.innerHTML = `<div class="foto-caixa-in">
+      <button class="foto-fechar" title="Fechar">✕</button>
+      <h3>${escaparHTML(nome)}</h3>
+      <img src="${img.src}" alt="${escaparHTML(nome)}">
+      <p class="mini-txt muted">${escaparHTML(img.arquivo)} — ${escaparHTML(img.autor)} · <a href="${img.fonte}" target="_blank" rel="noopener">${escaparHTML(img.licenca || "Wikimedia Commons")}</a></p>
+    </div>`;
+    caixa.hidden = false;
   }
   function lupaDe(id) {
     const e = D.estruturas[id]; if (!e || !window.LUPA) return null;
@@ -867,7 +911,7 @@
   $("#btnReset").addEventListener("click", () => {
     aplicarPreset("tudo"); definirSexo("feminino"); est.flexao = 0; aplicarFlexao(); corpo.raiz.scale.setScalar(1); est.puberdadeAtiva = false;
     ["hipotalamo", "hipofise", "ovarios", "testiculos"].forEach(limparRealce);
-    $("#corteTipo").value = "nenhum"; aplicarCorte(); voarPara(new T.Vector3(0, 9.2, 0), new T.Vector3(0, 10.5, 27)); desselecionar();
+    $("#corteTipo").value = "nenhum"; aplicarCorte(); verCorpoInteiro("frente"); desselecionar();
   });
 
   /* -------------------------------- LOOP -------------------------------- */

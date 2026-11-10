@@ -19,4 +19,7 @@ Os modelos 3D são reais, reconstruídos a partir de exames de imagem:
 
 As malhas foram simplificadas e compactadas com [meshoptimizer](https://github.com/zeux/meshoptimizer) e ficam na pasta `modelos/`.
 
+## Imagens anatômicas reais
+Cada estrutura tem uma imagem real (fotografia, prancha anatômica ou ilustração médica) na ficha — clique nela para ampliar. As imagens vêm do **Wikimedia Commons**, todas com licenças livres (domínio público, CC0, CC BY ou CC BY-SA), incluindo pranchas de *Gray's Anatomy* (1918) e Sobotta (1909), ilustrações Blausen Medical e imagens do BodyParts3D. O autor e a licença de cada imagem aparecem abaixo dela e estão registrados em `js/imagens.js`; os arquivos ficam na pasta `imagens/` (funcionam sem internet).
+
 Feito com [three.js](https://threejs.org/).
