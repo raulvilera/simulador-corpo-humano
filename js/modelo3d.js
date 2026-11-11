@@ -33,7 +33,7 @@ window.construirCorpo = async function (aoProgresso) {
     pulm_art: [0x3b5fc0, { roughness: 0.32, clearcoat: 0.5 }], pulm_veia: [0xd2343e, { roughness: 0.32, clearcoat: 0.5 }],
     coracao: [0xa3282a, { roughness: 0.38, clearcoat: 0.6, sheen: 0.3, sheenColor: 0xff9a8a }],
     cerebro: [0xe7b9b0, { roughness: 0.62, clearcoat: 0.25 }], cerebelo: [0xd99c97, { roughness: 0.6, clearcoat: 0.25 }], tronco: [0xe4bfac, { roughness: 0.55 }],
-    medula: [0xf0dcae, { roughness: 0.45, clearcoat: 0.3 }], nervo: [0xf3d36b, { roughness: 0.45, clearcoat: 0.3 }],
+    medula: [0xf0dcae, { roughness: 0.45, clearcoat: 0.3 }], nervo: [0xffc21a, { roughness: 0.4, clearcoat: 0.3 }], ganglio: [0xff6a1f, { roughness: 0.35, clearcoat: 0.5 }],
     olho: [0xf5f2ec, { roughness: 0.2, clearcoat: 0.8 }], cornea: [0xe8f4ff, { roughness: 0.05, transparent: true, opacity: 0.35, clearcoat: 1 }],
     iris: [0x4f7d46, { roughness: 0.4 }], cristalino: [0xf2f6ff, { roughness: 0.05, transparent: true, opacity: 0.5 }], musc_olho: [0xae3c37, { roughness: 0.5 }],
     orelha: [0xd6a184, { roughness: 0.6 }], lingua: [0xc95560, { roughness: 0.55, clearcoat: 0.4 }],
@@ -152,8 +152,15 @@ window.construirCorpo = async function (aoProgresso) {
   const curva = pts => new T.CatmullRomCurve3(pts.map(p => p.isVector3 ? p : VA(p)), false, "catmullrom", 0.5);
   function tubo(pts, r, id, sist, mat, pai) {
     const c = curva(pts);
+    if (mat === "nervo") r *= 1.3;   // nervos em evidência
     const m = new T.Mesh(new T.TubeGeometry(c, Math.max(24, pts.length * 8), r, 8, false), material(id, mat));
     m.userData.curva = c; registrar(m, id, sist); (pai || grupos[sist]).add(m); return m;
+  }
+  // Gânglio: pequeno corpo ovoide (agrupamento de corpos de neurônios fora do SNC)
+  function ganglio(id, p, r, esc, pai) {
+    const m = new T.Mesh(new T.SphereGeometry(r, 16, 12), material(id, "ganglio"));
+    m.position.copy(p.isVector3 ? p : VA(p)); if (esc) m.scale.set(esc[0], esc[1], esc[2]);
+    registrar(m, id, "nervoso"); (pai || grupos.nervoso).add(m); return m;
   }
   // Nervos periféricos (seguem os feixes vasculonervosos reais)
   const N = TR.L.nervos;
@@ -428,6 +435,7 @@ window.construirCorpo = async function (aoProgresso) {
         const c = canal(ys), pts = [canal(yo).add(V(s * 0.025, 0, 0))];
         if (yo - ys > 0.3) { pts.push(canal((yo + ys) / 2).add(V(s * 0.035, 0, -0.01))); pts.push(canal(ys + 0.1).add(V(s * 0.05, 0, 0))); }
         const F = V(s * 0.2, ys, c.z + 0.06); pts.push(F);
+        if (nome !== "Co") ganglio("ganglios_espinais", pts[pts.length - 2].clone().lerp(F, 0.62), 0.03, [1.35, 1, 1]);   // gânglio espinal (raiz dorsal)
         const n = +nome.slice(1), g = nome[0]; let r = 0.013;
         if (g === "C" && n <= 4) pts.push(V(s * 0.3, ys - 0.07, c.z + 0.14), V(s * 0.44, ys - 0.16, c.z + 0.2));                                   // plexo cervical
         else if ((g === "C" && n >= 5) || nome === "T1") { r = 0.017; pts.push(V(s * 0.45, (ys + 14.3) / 2, -0.12), V(s * 0.72, 14.22, -0.02), braco); }   // plexo braquial
@@ -437,6 +445,40 @@ window.construirCorpo = async function (aoProgresso) {
         else pts.push(V(s * 0.24, ys - 0.14, c.z + 0.03));                                                                                         // S4, S5 e coccígeo
         tubo(pts, r, "nervos_espinais", "nervoso", "nervo");
       });
+      /* ---- sistema nervoso autônomo: tronco simpático (cadeia de gânglios ao lado da coluna) ---- */
+      const zs = y => y > 14.4 ? 0.3 : y > 11.5 ? 0.22 : y > 9.7 ? 0.4 : 0.26;
+      const xs = y => y > 9.7 ? 0.3 : 0.3 * Math.max(0.2, (y - 8.9) / 0.8);
+      const ts = y => { const c = canal(y); return V(c.x + s * xs(y), y, c.z + zs(y)); };
+      const impar = V(0, 8.95, canal(8.95).z + 0.24);
+      const cerv = [[15.35, 0.042, 2.3], [14.9, 0.03, 1.5], [14.52, 0.04, 1.7]];   // cervicais superior, médio e cervicotorácico (estrelado)
+      const comRaiz = niveis.filter(([nome]) => /^T([2-9]|1[0-2])$|^L[1-4]$|^S[1-4]$/.test(nome));
+      tubo([ts(15.62), ...cerv.map(g => ts(g[0])), ...comRaiz.map(([, ys]) => ts(ys)), impar], 0.012, "tronco_simpatico", "nervoso", "nervo");
+      cerv.forEach(g => ganglio("ganglios_simpaticos", ts(g[0]), g[1], [1, g[2], 1]));
+      comRaiz.forEach(([, ys]) => {
+        const G = ts(ys), c = canal(ys), F = V(s * 0.2, ys, c.z + 0.06);
+        ganglio("ganglios_simpaticos", G, 0.03, [1, 1.5, 1]);
+        tubo([G, G.clone().lerp(F, 0.5).add(V(s * 0.03, 0.015, 0)), F], 0.007, "tronco_simpatico", "nervoso", "nervo");   // ramos comunicantes
+      });
+      [[14.52, 14.48], [15.35, 15.25], [15.35, 15.37], [14.9, 14.87]].forEach(([yg, yn]) => { const c = canal(yn); tubo([ts(yg), ts(yg).lerp(V(s * 0.2, yn, c.z + 0.06), 0.5), V(s * 0.2, yn, c.z + 0.06)], 0.007, "tronco_simpatico", "nervoso", "nervo"); });
+      if (s > 0) ganglio("ganglios_simpaticos", impar, 0.035, [1.2, 1, 1]);   // gânglio ímpar, onde as duas cadeias se unem
+      // gânglios pré-vertebrais (à frente da aorta) e nervos esplâncnicos que chegam a eles
+      const ao = y => V(0.08, y, (y > 11.59 ? 0.08 - (y - 11.59) * 0.34 : 0.08 + (11.59 - y) * 0.138) + 0.1);
+      const cel = ao(11.75).add(V(s * 0.16, 0, 0)), mesS = ao(11.45), mesI = ao(10.7);
+      ganglio("ganglios_pre_vertebrais", cel, 0.06, [1.1, 0.8, 0.7]);
+      const yT = n => 14.48 - (n - 1) * 0.2515;
+      [5, 6, 7, 8, 9].forEach(n => tubo([ts(yT(n)), V(s * 0.3, (yT(n) + 12.0) / 2, canal(12.4).z + 0.32), V(s * 0.22, 12.0, -0.25), cel], 0.008, "nervos_esplancnicos", "nervoso", "nervo"));   // esplâncnico maior
+      [10, 11].forEach(n => tubo([ts(yT(n)), V(s * 0.26, 11.75, -0.2), mesS.clone().add(V(s * 0.05, 0, 0))], 0.008, "nervos_esplancnicos", "nervoso", "nervo"));                               // esplâncnico menor
+      [11.4, 11.03].forEach(y => tubo([ts(y), V(s * 0.2, y - 0.35, 0.05), mesI.clone().add(V(s * 0.04, 0, 0))], 0.008, "nervos_esplancnicos", "nervoso", "nervo"));                              // esplâncnicos lombares
+      tubo([cel, mesS], 0.01, "nervos_esplancnicos", "nervoso", "nervo");
+      // plexo hipogástrico: desce do gânglio mesentérico inferior para os órgãos da pelve
+      tubo([mesI, V(s * 0.06, 10.1, 0.12), V(s * 0.2, 9.6, -0.2), V(s * 0.28, 9.15, -0.42)], 0.01, "nervos_esplancnicos", "nervoso", "nervo");
+      ganglio("ganglios_pre_vertebrais", V(s * 0.28, 9.15, -0.42), 0.04, [1, 1, 0.8]);
+      if (s > 0) {
+        ganglio("ganglios_pre_vertebrais", mesS, 0.05, [1, 0.9, 0.7]); ganglio("ganglios_pre_vertebrais", mesI, 0.045, [1, 0.9, 0.7]);
+        tubo([mesS, ao(11.1), mesI], 0.01, "nervos_esplancnicos", "nervoso", "nervo");
+        // ramos do plexo celíaco ("plexo solar") para estômago, fígado e intestino
+        [[[0.3, 11.85, 0.3], [0.55, 11.8, 0.5]], [[-0.25, 11.9, 0.3], [-0.55, 11.95, 0.45]], [[0.1, 11.4, 0.35], [0.15, 11.1, 0.5]]].forEach(b => tubo([ao(11.75), VA(b[0]), VA(b[1])], 0.008, "nervos_esplancnicos", "nervoso", "nervo"));
+      }
     });
   })();
 
@@ -487,6 +529,22 @@ window.construirCorpo = async function (aoProgresso) {
       nv("nervo_facial", 0.01, [fac, [0.68, 15.95, 0.42], [0.58, 16.0, 0.72]]);
       nv("nervo_facial", 0.01, [fac, [0.64, 15.65, 0.48], [0.48, 15.6, 0.82]]);
       nv("nervo_facial", 0.01, [fac, [0.58, 15.4, 0.3], [0.44, 15.2, 0.6]]);
+      // trigêmeo (V par): gânglio trigeminal e os ramos oftálmico, maxilar e mandibular
+      const gt = [0.26, 15.98, -0.02];
+      nv("nervo_trigemeo", 0.018, [[0.16, 15.9, -0.22], [0.2, 15.95, -0.12], gt]);
+      ganglio("nervo_trigemeo", [gt[0] * s, gt[1], gt[2]], 0.05, [1.2, 0.8, 1]);
+      nv("nervo_trigemeo", 0.012, [gt, [0.3, 16.25, 0.35], [0.3, 16.45, 0.7], [0.26, 16.6, 0.82]]);
+      nv("nervo_trigemeo", 0.012, [gt, [0.32, 15.92, 0.4], [0.3, 15.85, 0.82]]);
+      nv("nervo_trigemeo", 0.012, [gt, [0.36, 15.6, 0.15], [0.34, 15.3, 0.4], [0.22, 15.12, 0.66]]);
+      // acessório (XI par) para o trapézio e hipoglosso (XII par) para a língua
+      nv("nervo_acessorio", 0.014, [[0.14, 15.5, -0.26], [0.36, 15.2, -0.3], [0.62, 14.85, -0.38], [0.95, 14.5, -0.45]]);
+      nv("nervo_hipoglosso", 0.012, [[0.12, 15.52, -0.18], [0.3, 15.25, 0.05], [0.24, 15.15, 0.32], [0.08, 15.22, 0.5]]);
+      // ramos do vago para o coração e os pulmões
+      nv("nervo_vago", 0.012, [[0.24, 13.8, -0.08], [0.3, 13.55, 0.1], [0.25, 13.3, 0.25]]);
+      nv("nervo_vago", 0.012, [[0.2, 13.3, -0.2], [0.42, 13.2, -0.15], [0.62, 13.1, -0.1]]);
+      // plexo cervical (C1–C4): occipital (couro cabeludo) e supraclaviculares (ombro)
+      nv("plexo_cervical", 0.012, [[0.2, 15.4, -0.05], [0.3, 15.55, -0.5], [0.3, 15.95, -1.0], [0.3, 16.35, -1.2]]);
+      nv("plexo_cervical", 0.012, [[0.3, 15.1, 0.1], [0.55, 14.8, 0.2], [0.85, 14.5, 0.3], [1.15, 14.3, 0.3]]);
       /* ---- plexo lombar ---- */
       nv("nervo_femoral", 0.02, [[0.56, 8.95, 0.25], [0.75, 8.3, 0.35], [0.9, 7.5, 0.3], [0.95, 6.6, 0.25]]);                                   // ramos para o quadríceps
       nv("nervo_femoral", 0.016, [[0.66, 5.61, -0.04], [0.5, 5.0, -0.15], [0.4, 4.4, -0.25], [0.38, 3.4, -0.33], [0.4, 2.4, -0.35], [0.45, 1.5, -0.33], [0.52, 0.8, -0.2]]);   // nervo safeno
@@ -499,6 +557,15 @@ window.construirCorpo = async function (aoProgresso) {
       // tibial: continua pela planta do pé
       nv("nervo_tibial", 0.02, [torn, [0.6, 0.3, -0.25], [0.78, 0.14, 0.15], [1.0, 0.11, 0.7], [1.15, 0.1, 1.1]]);
       // fibular comum: contorna a cabeça da fíbula e divide-se em profundo (frente da perna e dorso do pé) e superficial (lateral)
+      // dedos dos pés: ramos digitais plantares (tibial) e dorsais (fibular)
+      const dedos = [[0.98, 0.11, 1.32], [1.15, 0.11, 1.28], [1.3, 0.11, 1.23], [1.43, 0.11, 1.16], [1.56, 0.11, 1.08]];
+      dedos.forEach((d, i) => nv("nervo_tibial", 0.009, [[1.0, 0.11, 0.7], [0.95 + i * 0.12, 0.1, 0.95], d]));
+      dedos.forEach((d, i) => nv("nervo_fibular", 0.009, [i < 2 ? [1.05, 0.24, 1.0] : [1.3, 0.22, 0.95], [d[0], 0.19, d[2] - 0.14], [d[0], 0.16, d[2] - 0.02]]));
+      // sural: pele da panturrilha e da borda lateral do pé
+      nv("nervo_sural", 0.016, [popl, [0.88, 4.2, -0.62], [0.92, 3.2, -0.8], [0.95, 2.2, -0.75], [1.02, 1.2, -0.6], [1.08, 0.6, -0.45], [1.2, 0.3, 0], [1.5, 0.2, 0.6]]);
+      // glúteos superior e inferior
+      nv("nervos_gluteos", 0.016, [[0.4, 9.6, -0.7], [0.8, 9.75, -0.82], [1.2, 9.6, -0.78]]);
+      nv("nervos_gluteos", 0.016, [[0.4, 9.45, -0.72], [0.75, 9.1, -0.85], [1.05, 8.8, -0.8]]);
       const colo = [1.22, 3.9, -0.3];
       nv("nervo_fibular", 0.028, [popl, [1.08, 4.6, -0.45], [1.2, 4.2, -0.4], colo]);
       nv("nervo_fibular", 0.02, [colo, [1.1, 3.4, -0.15], [1.0, 2.6, -0.1], [0.92, 1.8, -0.1], [0.86, 1.0, -0.05], [0.86, 0.62, 0.2], [0.95, 0.42, 0.6], [1.05, 0.24, 1.0], [1.1, 0.18, 1.2]]);

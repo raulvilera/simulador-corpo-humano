@@ -449,7 +449,7 @@
   const camadaRot = $("#rotulos");
   const ROT = ["cerebro", "cerebelo", "olho", "coracao", "pulmao_d", "pulmao_e", "figado", "estomago", "intestino_delgado", "intestino_grosso", "rim_d", "rim_e", "bexiga", "cranio", "coluna", "costelas", "femur", "umero", "traqueia", "esofago", "tireoide", "baco", "pancreas", "diafragma", "biceps", "quadriceps", "deltoide", "aorta", "medula", "utero", "testiculos", "ovarios", "timo", "glandulas_salivares", "uretra"];
   // nomes dos nervos: só aparecem quando poucos sistemas estão visíveis, para não poluir o corpo completo
-  const ROT_NERVOS = new Set(["nervo_facial", "nervo_vago", "nervo_frenico", "nervos_intercostais", "nervo_radial", "nervo_mediano", "nervo_ulnar", "nervo_femoral", "nervo_isquiatico", "nervo_tibial", "nervo_fibular"]);
+  const ROT_NERVOS = new Set(["nervo_trigemeo", "plexo_cervical", "nervos_espinais", "ganglios_espinais", "ganglios_simpaticos", "tronco_simpatico", "ganglios_pre_vertebrais", "nervos_esplancnicos", "nervos_ombro_braco", "nervo_obturatorio", "nervo_sural", "nervo_facial", "nervo_vago", "nervo_frenico", "nervos_intercostais", "nervo_radial", "nervo_mediano", "nervo_ulnar", "nervo_femoral", "nervo_isquiatico", "nervo_tibial", "nervo_fibular"]);
   ROT.push(...ROT_NERVOS);
   // Setas: nomes nas margens da área 3D, com seta até a superfície da estrutura.
   var setasCorpo = SETAS.criar(camadaRot);   // var: pode ser consultada antes desta linha
