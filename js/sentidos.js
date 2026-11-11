@@ -280,7 +280,7 @@
         <div class="lupa-abas">${Object.entries(ORGAOS).map(([k, o]) => `<button data-lupa="${k}">${o.icone} ${o.nome}</button>`).join("")}</div>
         <div class="lupa-acoes">
           <button id="lupaCorte" title="Cortar ao meio">✂️ Corte</button>
-          <button id="lupaRot" title="Mostrar nomes">🏷️ Rótulos</button>
+          <button id="lupaRot" class="ativo" title="Mostrar nomes com setas">🏷️ Rótulos</button>
           <button id="lupaFechar" title="Voltar ao corpo">✕ Voltar ao corpo</button>
         </div>
       </div>
@@ -293,7 +293,7 @@
     div.querySelectorAll("[data-lupa]").forEach(b => b.onclick = () => abrir(b.dataset.lupa));
     div.querySelector("#lupaFechar").onclick = fechar;
     div.querySelector("#lupaCorte").onclick = e => { ctx.corte = !ctx.corte; e.currentTarget.classList.toggle("ativo", ctx.corte); aplicarCorte(); };
-    div.querySelector("#lupaRot").onclick = e => { ctx.rotulos = !ctx.rotulos; e.currentTarget.classList.toggle("ativo", ctx.rotulos); document.getElementById("lupaRotulos").hidden = !ctx.rotulos; };
+    div.querySelector("#lupaRot").onclick = e => { ctx.rotulos = !ctx.rotulos; e.currentTarget.classList.toggle("ativo", ctx.rotulos); document.getElementById("lupaRotulos").hidden = !ctx.rotulos; zoomRotulos(); };
     return div;
   }
 
@@ -310,7 +310,7 @@
     const l2 = new T.DirectionalLight(0xbcd4ff, 0.5); l2.position.set(-6, 3, -5); cena.add(l2);
     const camera = new T.PerspectiveCamera(35, 1, 0.05, 200);
     const controles = new T.OrbitControls(camera, renderer.domElement); controles.enableDamping = true;
-    ctx = { div, palco, renderer, cena, camera, controles, raiz: null, mats: {}, malhas: [], corte: false, rotulos: false, plano: new T.Plane(V(-1, 0, 0), 0), anim: null, sel: null, cache: {} };
+    ctx = { div, palco, renderer, cena, camera, controles, raiz: null, mats: {}, malhas: [], corte: false, rotulos: true, plano: new T.Plane(V(-1, 0, 0), 0), anim: null, sel: null, cache: {} };
     // seleção
     const ray = new T.Raycaster(), mouse = new T.Vector2(); let down = null;
     renderer.domElement.addEventListener("pointerdown", e => down = [e.clientX, e.clientY]);
@@ -334,7 +334,7 @@
     return ctx;
   }
   const vis = o => { while (o) { if (!o.visible) return false; o = o.parent; } return true; };
-  function redim() { if (!ctx || ctx.div.hidden) return; const w = ctx.palco.clientWidth, h = ctx.palco.clientHeight; if (!w || !h) return; ctx.renderer.setSize(w, h, false); ctx.camera.aspect = w / h; ctx.camera.updateProjectionMatrix(); }
+  function redim() { if (!ctx || ctx.div.hidden) return; const w = ctx.palco.clientWidth, h = ctx.palco.clientHeight; if (!w || !h) return; ctx.renderer.setSize(w, h, false); ctx.camera.aspect = w / h; ctx.camera.updateProjectionMatrix(); zoomRotulos(); }
 
   function M(id, key) {
     const k = id + ":" + key;
@@ -449,19 +449,47 @@
     lista.querySelectorAll("[data-sel]").forEach(b => b.onclick = e => { e.preventDefault(); selecionar(b.dataset.sel, true); });
     lista.querySelectorAll("[data-vis]").forEach(c => c.onchange = () => { ctx.malhas.forEach(m => { if (m.userData.id === c.dataset.vis) m.visible = c.checked; }); });
   }
+  // Setas: nomes nas margens, com seta até o ponto visível de cada estrutura.
   function montarRotulos() {
-    const camada = document.getElementById("lupaRotulos"); camada.innerHTML = ""; camada.hidden = !ctx.rotulos;
+    const camada = document.getElementById("lupaRotulos"); camada.hidden = !ctx.rotulos;
+    if (!ctx.setas) ctx.setas = SETAS.criar(camada); else ctx.setas.limpar();
     const D = window.DADOS.estruturas; ctx.rots = [];
     partesDe(ctx.org).forEach(k => {
-      const cx = new T.Box3(); ctx.malhas.filter(m => m.userData.id === k).forEach(m => cx.expandByObject(m));
-      if (cx.isEmpty()) return;
-      const d = document.createElement("div"); d.className = "rotulo"; d.textContent = D[k].nome; d.onclick = () => selecionar(k, true); camada.appendChild(d);
-      ctx.rots.push({ d, p: cx.getCenter(V(0, 0, 0)), k });
+      const ms = ctx.malhas.filter(m => m.userData.id === k); if (!ms.length || !D[k]) return;
+      ctx.setas.adicionar(k, D[k].nome, () => selecionar(k, true));
+      ctx.rots.push({ k, pts: SETAS.amostrar(ms, 220) });
     });
+    zoomRotulos(true);
+  }
+  // Enquadra o modelo no espaço livre entre as duas colunas de nomes (ou na área toda,
+  // sem rótulos): mede o tamanho do modelo na tela e ajusta o zoom da câmera.
+  function zoomRotulos(centrar) {
+    if (!ctx || !ctx.raiz || !ctx.rots) return;
+    const w = ctx.palco.clientWidth, h = ctx.palco.clientHeight; if (!w || !h) return;
+    const cam = ctx.camera; ctx.raiz.updateMatrixWorld(true);
+    const pts = []; const v = V(0, 0, 0);
+    ctx.rots.forEach(r => r.pts.forEach(p => { if (vis(p.m)) pts.push(v.set(p.x, p.y, p.z).applyMatrix4(p.m.matrixWorld).clone()); }));
+    if (!pts.length) return;
+    if (centrar) {   // centraliza o modelo: o alvo da câmera vai para o centro dos pontos
+      const c = new T.Box3().setFromPoints(pts).getCenter(V(0, 0, 0));
+      cam.position.add(c.clone().sub(ctx.controles.target)); ctx.controles.target.copy(c); ctx.controles.update();
+    }
+    cam.zoom = 1; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+    let mx = 0.01, my = 0.01;
+    pts.forEach(p => { p.project(cam); if (p.z > 1) return; mx = Math.max(mx, Math.abs(p.x)); my = Math.max(my, Math.abs(p.y)); });
+    const livreX = ctx.rotulos ? Math.max(0.25, (w - 2 * 150) / w) : 0.9;   // metade da largura livre (NDC)
+    cam.zoom = Math.min(4, Math.max(0.25, Math.min(livreX / mx, 0.86 / my)));
+    cam.updateProjectionMatrix();
   }
   function rotulos() {
-    if (!ctx.rotulos || !ctx.rots) return; const w = ctx.palco.clientWidth, h = ctx.palco.clientHeight;
-    ctx.rots.forEach(r => { const v = r.p.clone().project(ctx.camera); r.d.hidden = v.z > 1; r.d.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px)`; });
+    if (!ctx.rotulos || !ctx.rots || !ctx.setas) return; const w = ctx.palco.clientWidth, h = ctx.palco.clientHeight, pts = [];
+    const lado = ctx.corte ? (p => ctx.plano.distanceToPoint(p) >= 0) : null;
+    ctx.rots.forEach(r => {
+      const a = SETAS.ancora(r.pts, ctx.camera, T, lado, vis); if (!a) return;
+      const v = a.project(ctx.camera); if (v.z > 1 || Math.abs(v.x) > 0.98 || Math.abs(v.y) > 0.98) return;
+      pts.push({ id: r.k, x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h });
+    });
+    ctx.setas.atualizar(pts, w, h);
   }
   function realce(id, cor) { ctx.malhas.forEach(m => { if (m.userData.id === id && m.material.emissive) { m.material.emissive.setHex(cor); m.material.emissiveIntensity = 0.45; } }); }
   function selecionar(id, deLista) {
@@ -469,6 +497,7 @@
     if (ctx.sel) realce(ctx.sel, 0);
     ctx.sel = id; if (ctx.malhas.some(m => m.userData.id === id)) realce(id, 0xffaa22);
     ctx.div.querySelectorAll("[data-sel]").forEach(b => b.classList.toggle("ativo", b.dataset.sel === id));
+    if (ctx.setas) ctx.setas.marcar(id);
     if (D[id] && APPREF && APPREF.info) APPREF.info(id, true);
   }
 

@@ -35,18 +35,31 @@
   const luz3 = new T.DirectionalLight(0xffe2cc, 0.3); luz3.position.set(0, -4, 12); cena.add(luz3);
 
   // base circular
-  const base = new T.Mesh(new T.CylinderGeometry(4.2, 4.4, 0.25, 64), new T.MeshStandardMaterial({ color: 0x1d2a44, roughness: 0.8 }));
-  base.position.y = -0.15; cena.add(base);
-  const anel = new T.Mesh(new T.TorusGeometry(4.3, 0.04, 8, 96), new T.MeshBasicMaterial({ color: 0x4cc9f0 }));
-  anel.rotation.x = Math.PI / 2; anel.position.y = 0; cena.add(anel);
+  // chão: sombra de contato suave + um anel fino, no lugar de um pedestal
+  const cvSombra = document.createElement("canvas"); cvSombra.width = cvSombra.height = 256;
+  const gSombra = cvSombra.getContext("2d"), grad = gSombra.createRadialGradient(128, 128, 6, 128, 128, 128);
+  grad.addColorStop(0, "rgba(0,0,0,.5)"); grad.addColorStop(0.45, "rgba(0,0,0,.2)"); grad.addColorStop(1, "rgba(0,0,0,0)");
+  gSombra.fillStyle = grad; gSombra.fillRect(0, 0, 256, 256);
+  const base = new T.Mesh(new T.CircleGeometry(4.4, 64), new T.MeshBasicMaterial({ map: new T.CanvasTexture(cvSombra), transparent: true, depthWrite: false, toneMapped: false }));
+  base.rotation.x = -Math.PI / 2; base.scale.set(1, 0.6, 1); base.position.y = -0.03; base.renderOrder = -2; cena.add(base);
+  const anel = new T.Mesh(new T.RingGeometry(4.3, 4.335, 128), new T.MeshBasicMaterial({ color: 0x9bb5b2, transparent: true, opacity: 0.55, depthWrite: false, side: T.DoubleSide, toneMapped: false }));
+  anel.rotation.x = -Math.PI / 2; anel.position.y = -0.02; anel.renderOrder = -1; cena.add(anel);
 
-  const txtCarga = document.querySelector("#carregando p");
+  // tema claro/escuro
+  const aplicarTema = t => { document.documentElement.dataset.theme = t; anel.material.color.setHex(t === "light" ? 0x53706c : 0x9bb5b2); base.material.opacity = t === "light" ? 0.6 : 1; };
+  aplicarTema(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+  $("#btnTema").addEventListener("click", () => {
+    const t = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    aplicarTema(t); try { localStorage.setItem("tema", t); } catch (e) { }
+  });
+
+  const telaCarga = $("#carregando"), txtCarga = document.querySelector("#carregando p");
   let corpo;
   try {
-    corpo = await construirCorpo((f, nome) => { if (txtCarga) txtCarga.textContent = `Carregando modelos anatômicos… ${Math.round(f * 100)}% (${nome})`; });
+    corpo = await construirCorpo((f, nome) => { telaCarga.style.setProperty("--p", f); if (txtCarga) txtCarga.textContent = `Carregando modelos anatômicos: ${nome} (${Math.round(f * 100)}%)`; });
   } catch (e) {
     console.error(e);
-    if (txtCarga) txtCarga.innerHTML = "Não foi possível carregar os modelos 3D.<br><small>Use um navegador atualizado (Chrome, Edge, Firefox ou Safari).</small>";
+    if (txtCarga) txtCarga.innerHTML = "Os modelos 3D não carregaram.<br><small>Abra em um navegador atualizado (Chrome, Edge, Firefox ou Safari).</small>";
     return;
   }
   cena.add(corpo.raiz);
@@ -58,7 +71,7 @@
     selecionado: null, opac: {}, visivel: {}, sexo: "feminino",
     bpm: 72, fr: 14, fluxo: true, girar: false,
     digest: null, reflexo: null, flexao: 0, hidrat: 2, bexiga: 0.25, idade: 14,
-    rotulos: false, vistaInteira: "frente", modo: "explorar", desafio: null, puberdadeAtiva: false
+    rotulos: true, vistaInteira: "frente", modo: "explorar", desafio: null, puberdadeAtiva: false
   };
   Object.keys(D.sistemas).forEach(s => { est.opac[s] = 1; est.visivel[s] = true; });
   est.opac.tegumentar = 0.18;
@@ -255,7 +268,7 @@
     const id = o ? o.userData.id : null;
     if (realceHover !== id) {
       if (realceHover && realceHover !== est.selecionado) limparRealce(realceHover);
-      if (id && id !== est.selecionado && est.modo !== "desafio") realcar(id, 0x334455, 0.6);
+      if (id && id !== est.selecionado && est.modo !== "desafio") realcar(id, 0x4a3a1c, 0.6);
       realceHover = id;
     }
     if (o && est.modo !== "desafio") {
@@ -277,6 +290,7 @@
 
   const EXTERNOS = ["tegumentar", "muscular", "esqueletico"];
   function selecionar(id, voar, obj) {
+    if (setasCorpo) setasCorpo.marcar(id);
     if (voar && D.estruturas[id] && !EXTERNOS.includes(D.estruturas[id].sistema)) {
       // ao focar um órgão interno, deixa as camadas externas translúcidas
       if (est.visivel.muscular && est.opac.muscular > 0.2) est.opac.muscular = 0.12;
@@ -291,7 +305,7 @@
     if (voar) focar(id);
     if (est.modo !== "explorar" && window.innerWidth < 900) { }
   }
-  function desselecionar() { if (est.selecionado) limparRealce(est.selecionado); est.selecionado = null; }
+  function desselecionar() { if (est.selecionado) limparRealce(est.selecionado); est.selecionado = null; if (setasCorpo) setasCorpo.marcar(null); }
 
   /* --------------------------- PAINEL DE INFORMAÇÃO --------------------- */
   const painelInfo = $("#info");
@@ -327,10 +341,10 @@
         ${cods.length ? `<h4>Habilidades BNCC relacionadas</h4><div class="chips">${cods.map(c => `<button class="chip" data-bncc="${c}">${c}</button>`).join("")}</div>` : ""}
         ${e.orgao && D.estruturas[e.orgao] ? `<p class="mini-txt muted">Faz parte de: <a href="#" id="lnkOrgao">${D.estruturas[e.orgao].nome}</a></p>` : ""}
         <div class="acoes">
-          ${lupaDe(id) && !daLupa ? `<button class="btn destaque-btn" id="btnLupaInfo">🔬 Ver em detalhe</button>` : ""}
-          ${e.soLupa ? "" : `<button class="btn" id="btnFocar">🔍 Aproximar</button>`}
-          <button class="btn" id="btnOuvir">🔊 Ouvir</button>
-          <button class="btn" id="btnIsolar">◎ Isolar sistema</button>
+          ${lupaDe(id) && !daLupa ? `<button class="btn destaque-btn" id="btnLupaInfo">Ver em detalhe</button>` : ""}
+          ${e.soLupa ? "" : `<button class="btn" id="btnFocar">Aproximar</button>`}
+          <button class="btn" id="btnOuvir">Ouvir</button>
+          <button class="btn" id="btnIsolar">Isolar sistema</button>
         </div>
       </div>
       <div class="cartao pequeno"><h4>Sobre o sistema ${s.nome}</h4><p>${s.descricao}</p></div>`;
@@ -408,29 +422,26 @@
   /* ------------------------------ RÓTULOS ------------------------------- */
   const camadaRot = $("#rotulos");
   const ROT = ["cerebro", "cerebelo", "olho", "coracao", "pulmao_d", "pulmao_e", "figado", "estomago", "intestino_delgado", "intestino_grosso", "rim_d", "rim_e", "bexiga", "cranio", "coluna", "costelas", "femur", "umero", "traqueia", "esofago", "tireoide", "baco", "pancreas", "diafragma", "biceps", "quadriceps", "deltoide", "aorta", "medula", "utero", "testiculos", "ovarios", "timo"];
-  const rotEls = {};
-  ROT.forEach(id => { const d = el("div", { class: "rotulo" }, D.estruturas[id].nome); camadaRot.appendChild(d); rotEls[id] = d; d.onclick = () => selecionar(id, true); });
-  const centrosCache = {};
-  function centro(id) {
-    const malhas = pecas.filter(m => pertence(m, id) && visivelDeFato(m));
-    if (!malhas.length) return null;
-    const c = new T.Box3(); malhas.slice(0, 6).forEach(m => c.expandByObject(m));
-    return c.getCenter(new T.Vector3());
-  }
+  // Setas: nomes nas margens da área 3D, com seta até a superfície da estrutura.
+  var setasCorpo = SETAS.criar(camadaRot);   // var: pode ser consultada antes desta linha
+  ROT.forEach(id => setasCorpo.adicionar(id, D.estruturas[id].nome, () => selecionar(id, true)));
+  const amostras = {};
+  function amostrasDe(id) { if (!amostras[id]) amostras[id] = SETAS.amostrar(pecas.filter(m => pertence(m, id)), 240); return amostras[id]; }
   function atualizarRotulos() {
     if (!est.rotulos) return;
-    const w = palco.clientWidth, h = palco.clientHeight;
+    const w = palco.clientWidth, h = palco.clientHeight, pts = [];
     ROT.forEach(id => {
-      const d = rotEls[id];
       const s = D.estruturas[id].sistema;
-      if (!est.visivel[s] || est.opac[s] < 0.15) { d.hidden = true; return; }
-      const c = centro(id); if (!c) { d.hidden = true; return; }
-      const v = c.project(camera);
-      if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) { d.hidden = true; return; }
-      d.hidden = false;
-      d.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px)`;
+      if (!est.visivel[s] || est.opac[s] < 0.15) return;
+      const a = SETAS.ancora(amostrasDe(id), camera, T, null, visivelDeFato); if (!a) return;
+      const v = a.project(camera);
+      if (v.z > 1 || Math.abs(v.x) > 0.98 || Math.abs(v.y) > 0.98) return;
+      pts.push({ id, x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h });
     });
+    setasCorpo.atualizar(pts, w, h);
   }
+  camadaRot.hidden = !est.rotulos;
+  $("#btnRotulos").classList.toggle("ativo", est.rotulos);
   $("#btnRotulos").addEventListener("click", e => {
     est.rotulos = !est.rotulos; e.currentTarget.classList.toggle("ativo", est.rotulos);
     camadaRot.hidden = !est.rotulos;
@@ -746,7 +757,7 @@
     const lst = $("#listaBNCC");
     D.bncc.forEach(h => {
       const c = el("div", { class: "cartao hab", "data-cod": h.codigo, "data-et": h.etapa });
-      c.innerHTML = `<div class="hab-top"><span class="codigo">${h.codigo}</span><span class="muted">${h.ano} · ${h.unidade}</span></div><p>${h.texto}</p><button class="btn prim">Explorar ▸</button>`;
+      c.innerHTML = `<div class="hab-top"><span class="codigo">${h.codigo}</span><span class="muted">${h.ano} · ${h.unidade}</span></div><p>${h.texto}</p><button class="btn prim">Explorar</button>`;
       c.querySelector("button").onclick = () => executarAcao(h.acao);
       lst.appendChild(c);
     });
@@ -808,7 +819,7 @@
       const certo = +b.dataset.i === q.c;
       if (certo) quiz.pontos++;
       area.querySelectorAll(".opcao").forEach(x => { if (+x.dataset.i === q.c) x.classList.add("certa"); else if (x === b) x.classList.add("errada"); x.disabled = true; });
-      $("#qFeed").innerHTML = `<div class="destaque ${certo ? "saude" : "erro"}"><b>${certo ? "Correto!" : "Não foi dessa vez."}</b> ${q.e}</div><button class="btn prim" id="qProx">Próxima ▸</button>`;
+      $("#qFeed").innerHTML = `<div class="destaque ${certo ? "saude" : "erro"}"><b>${certo ? "Correto!" : "Não foi dessa vez."}</b> ${q.e}</div><button class="btn prim" id="qProx">Próxima</button>`;
       $("#qProx").onclick = () => { quiz.i++; mostrarQuestao(); };
     });
   }
@@ -865,7 +876,7 @@
       <div class="cartao"><h3>📖 Glossário</h3><dl class="glossario">${D.glossario.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join("")}</dl></div>
       <div class="cartao"><h3>🧭 Como usar</h3><ul class="lista">
         <li><b>Girar:</b> arraste com o botão esquerdo · <b>Mover:</b> botão direito ou dois dedos · <b>Zoom:</b> roda do mouse ou pinça.</li>
-        <li>Clique em qualquer estrutura para ver a ficha; use <b>🔊 Ouvir</b> para escutar a explicação.</li>
+        <li>Clique em qualquer estrutura para ver a ficha; use <b>Ouvir</b> para escutar a explicação.</li>
         <li>No painel esquerdo, ligue/desligue sistemas e ajuste a transparência de cada um. Use <b>Corte anatômico</b> para ver planos sagital, coronal e transversal.</li>
         <li>Importe um modelo científico <b>.glb</b> (ex.: Z-Anatomy / BodyParts3D) para comparar com o modelo didático.</li></ul></div>
       <div class="cartao"><h3>🔎 Pesquisa e referências</h3><p class="muted">Modelos e fontes usados como referência científica (inclusive em cursos de medicina), adaptados para o Ensino Fundamental e Médio:</p>
@@ -953,10 +964,13 @@
   aplicarPreset("tudo"); definirSexo("feminino"); aplicarCorte();
   mostrarBoasVindas();
   function mostrarBoasVindas() {
-    painelInfo.innerHTML = `<div class="cartao"><h2>Bem-vindo(a) ao Corpo Humano 3D!</h2>
-      <p>Explore os <b>12 sistemas</b> do corpo humano, faça <b>simulações</b> de funcionamento e teste seus conhecimentos — tudo alinhado à <b>BNCC</b>.</p>
-      <ol class="lista"><li>Clique em um órgão para ver o que ele faz.</li><li>Use o painel <b>Sistemas</b> para mostrar camadas.</li><li>Na aba <b>Simular</b>, veja o coração bater, a respiração, a digestão e o arco reflexo.</li><li>Na aba <b>BNCC</b>, escolha uma habilidade e vá direto ao recurso.</li></ol>
-      <h4>Comece por um sistema</h4><div class="chips">${Object.entries(D.sistemas).map(([k, s]) => `<button class="chip" data-sis="${k}" style="--c:${s.cor}"><i style="background:${s.cor}"></i>${s.nome}</button>`).join("")}</div></div>`;
+    painelInfo.innerHTML = `<div class="cartao inicio"><h2>Por onde você quer começar?</h2>
+      <p>Escolha um dos ${Object.keys(D.sistemas).length} sistemas para vê-lo sozinho no modelo, ou clique direto em um órgão para abrir a ficha dele.</p>
+      <div class="grade-sis">${Object.entries(D.sistemas).map(([k, s]) => `<button class="sis-btn" data-sis="${k}"><i style="background:${s.cor}"></i><span>${s.nome}</span></button>`).join("")}</div></div>
+      <div class="cartao pequeno"><h4>O que mais dá para fazer</h4><ul class="lista">
+        <li>Em <b>Simular</b>, veja o coração bater, a respiração, a digestão e o arco reflexo.</li>
+        <li>Em <b>BNCC</b>, escolha uma habilidade e vá direto ao recurso.</li>
+        <li>Em <b>Quiz</b> e <b>Desafio</b>, teste o que você aprendeu.</li></ul></div>`;
     painelInfo.querySelectorAll("[data-sis]").forEach(b => b.onclick = () => {
       const id = b.dataset.sis;
       Object.keys(D.sistemas).forEach(x => est.visivel[x] = x === id || (id !== "tegumentar" && x === "tegumentar"));

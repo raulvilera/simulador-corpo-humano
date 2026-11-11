@@ -5,28 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Corpo Humano 3D — Simulador BNCC</title>
   <meta name="description" content="Simulador 3D interativo do corpo humano, em português, alinhado à BNCC para o Ensino Fundamental e Médio.">
+  <script>
+    (function () {
+      var t = null;
+      try { t = new URLSearchParams(location.search).get("tema") || localStorage.getItem("tema"); } catch (e) { }
+      if (t !== "light" && t !== "dark") t = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/estilo.css?v=3">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/estilo.css?v=8">
 </head>
 <body class="painel-aberto">
-  <div id="carregando"><div class="pulso">❤</div><p>Montando o corpo humano…</p></div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-marca" viewBox="0 0 24 24"><path d="M2 12h5l2-5 3.5 10 2.5-7 1.5 2H22"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+      <symbol id="i-lupa" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+      <symbol id="i-rotulo" viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.2"/></symbol>
+      <symbol id="i-girar" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></symbol>
+      <symbol id="i-foto" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+      <symbol id="i-tela" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v4.5h4.5"/></symbol>
+      <symbol id="i-fechar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-tema" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></symbol>
+      <symbol id="i-arquivo" viewBox="0 0 24 24"><path d="M12 16V5M7.5 9.5L12 5l4.5 4.5M5 19h14"/></symbol>
+    </defs>
+  </svg>
+
+  <div id="carregando">
+    <svg class="ecg" viewBox="0 0 240 60" aria-hidden="true"><path d="M0 34h62l8-6 8 6h14l6-26 9 46 7-20h16l10-9 10 9h90"/></svg>
+    <p>Montando o corpo humano…</p>
+    <div class="carga-barra"><span></span></div>
+  </div>
 
   <header class="topo">
-    <button class="icone so-movel" id="btnPainelSis" title="Sistemas">☰</button>
-    <div class="marca"><span class="logo">🫀</span><div><h1>Corpo Humano 3D</h1><small>Simulador didático · BNCC</small></div></div>
+    <button class="icone so-movel" id="btnPainelSis" title="Sistemas" aria-label="Abrir lista de sistemas"><svg class="ic"><use href="#i-menu"/></svg></button>
+    <div class="marca"><span class="logo"><svg class="ic"><use href="#i-marca"/></svg></span><div><h1>Corpo Humano 3D</h1><small>Simulador didático alinhado à BNCC</small></div></div>
     <nav class="abas" role="tablist">
-      <button class="aba ativo" data-aba="explorar">🔍 Explorar</button>
-      <button class="aba" data-aba="simular">⚙️ Simular</button>
-      <button class="aba" data-aba="bncc">📚 BNCC</button>
-      <button class="aba" data-aba="quiz">📝 Quiz</button>
-      <button class="aba" data-aba="desafio">🎯 Desafio</button>
-      <button class="aba" data-aba="saiba">📖 Saiba mais</button>
+      <button class="aba ativo" data-aba="explorar">Explorar</button>
+      <button class="aba" data-aba="simular">Simular</button>
+      <button class="aba" data-aba="bncc">BNCC</button>
+      <button class="aba" data-aba="quiz">Quiz</button>
+      <button class="aba" data-aba="desafio">Desafio</button>
+      <button class="aba" data-aba="saiba">Saiba mais</button>
     </nav>
     <div class="busca-wrap">
-      <input id="busca" type="search" placeholder="Buscar órgão ou osso…" autocomplete="off" aria-label="Buscar estrutura">
+      <svg class="ic busca-ic"><use href="#i-lupa"/></svg>
+      <input id="busca" type="search" placeholder="Buscar órgão ou osso" autocomplete="off" aria-label="Buscar estrutura">
       <div id="sugestoes" hidden></div>
     </div>
+    <button class="icone" id="btnTema" title="Alternar tema claro/escuro" aria-label="Alternar tema claro ou escuro"><svg class="ic"><use href="#i-tema"/></svg></button>
   </header>
 
   <main class="layout">
@@ -37,12 +68,13 @@
           <select id="preset"></select>
         </label>
         <div class="seg">
-          <button data-sexo="feminino" class="ativo">♀ Feminino</button>
-          <button data-sexo="masculino">♂ Masculino</button>
+          <button data-sexo="feminino" class="ativo">Feminino</button>
+          <button data-sexo="masculino">Masculino</button>
         </div>
       </section>
       <section>
-        <h3>Sistemas <small class="muted">(liga/desliga · transparência)</small></h3>
+        <h3>Sistemas</h3>
+        <p class="muted mini-txt sis-dica">Toque na cor para ligar ou desligar. A barra ajusta a transparência.</p>
         <div id="listaSistemas"></div>
       </section>
       <section>
@@ -59,7 +91,7 @@
       </section>
       <section>
         <h3>Modelo científico</h3>
-        <label class="btn arquivo">📂 Importar modelo .glb
+        <label class="btn arquivo"><svg class="ic"><use href="#i-arquivo"/></svg> Importar modelo .glb
           <input type="file" id="arquivoGlb" accept=".glb,.gltf" hidden>
         </label>
         <p class="muted mini-txt">Os modelos são reais (BodyParts3D e HuBMAP, CC BY 4.0). Você também pode importar outros atlas em .glb.</p>
@@ -68,38 +100,38 @@
 
     <section class="palco-wrap">
       <div class="ferramentas">
-        <div class="grupo-f">
+        <div class="grupo-f" role="group" aria-label="Lado do corpo">
           <button data-vista="frente" title="Vista anterior">Frente</button>
           <button data-vista="costas" title="Vista posterior">Costas</button>
           <button data-vista="lado" title="Vista lateral">Lado</button>
         </div>
-        <div class="grupo-f">
+        <div class="grupo-f" role="group" aria-label="Região do corpo">
           <button data-vista="cabeca">Cabeça</button>
           <button data-vista="torax">Tórax</button>
           <button data-vista="abdome">Abdome</button>
           <button data-vista="pelve">Pelve</button>
           <button data-vista="pernas">Pernas</button>
         </div>
-        <div class="grupo-f">
-          <button id="btnLupa" title="Órgãos dos sentidos ampliados">🔬 Lupa dos sentidos</button>
-          <button id="btnRotulos" title="Mostrar nomes">🏷️ Rótulos</button>
-          <button id="btnGirar" title="Girar automaticamente">⟳ Girar</button>
-          <button id="btnFoto" title="Salvar imagem">📷</button>
-          <button id="btnTela" title="Tela cheia">⛶</button>
-          <button id="btnReset" title="Restaurar">↺</button>
+        <div class="grupo-f" role="group" aria-label="Ferramentas">
+          <button id="btnLupa" title="Órgãos dos sentidos ampliados"><svg class="ic"><use href="#i-lupa"/></svg> Lupa dos sentidos</button>
+          <button id="btnRotulos" class="ativo" title="Mostrar nomes com setas"><svg class="ic"><use href="#i-rotulo"/></svg> Rótulos</button>
+          <button id="btnGirar" title="Girar automaticamente"><svg class="ic"><use href="#i-girar"/></svg> Girar</button>
+          <button id="btnFoto" title="Salvar imagem" aria-label="Salvar imagem"><svg class="ic"><use href="#i-foto"/></svg></button>
+          <button id="btnTela" title="Tela cheia" aria-label="Tela cheia"><svg class="ic"><use href="#i-tela"/></svg></button>
+          <button id="btnReset" title="Restaurar" aria-label="Restaurar a visão inicial"><svg class="ic"><use href="#i-reset"/></svg></button>
         </div>
       </div>
       <div class="palco-area">
         <div id="palco"></div>
-        <div id="rotulos" hidden></div>
+        <div id="rotulos"></div>
       </div>
-      <div class="ajuda-gestos">Arraste para girar · roda para zoom · botão direito para mover · clique em uma estrutura</div>
+      <div class="ajuda-gestos">Arraste para girar, use a roda para aproximar e clique em uma estrutura para abrir a ficha</div>
       <div id="dica" hidden></div>
       <div id="aviso" hidden></div>
     </section>
 
     <aside class="painel" id="painel">
-      <button class="icone fechar-painel so-movel" id="btnFecharPainel" title="Fechar">✕</button>
+      <button class="icone fechar-painel so-movel" id="btnFecharPainel" title="Fechar" aria-label="Fechar painel"><svg class="ic"><use href="#i-fechar"/></svg></button>
       <div class="conteudo-aba" id="aba-explorar"><div id="info"></div></div>
       <div class="conteudo-aba" id="aba-simular" hidden></div>
       <div class="conteudo-aba" id="aba-bncc" hidden></div>
@@ -111,7 +143,7 @@
 
   <div id="modal" hidden>
     <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
-      <header><h2 id="modalTitulo"></h2><button id="modalFechar" class="icone" title="Fechar">✕</button></header>
+      <header><h2 id="modalTitulo"></h2><button id="modalFechar" class="icone" title="Fechar" aria-label="Fechar"><svg class="ic"><use href="#i-fechar"/></svg></button></header>
       <div id="modalCorpo"></div>
     </div>
   </div>
@@ -134,11 +166,12 @@
   <script src="modelos/modelo_endocrino.js"></script>
   <script src="modelos/modelo_linfatico.js"></script>
   <script src="modelos/modelo_reprodutor.js"></script>
-  <script src="js/dados.js?v=3"></script>
-  <script src="js/imagens.js?v=3"></script>
-  <script src="js/sentidos.js?v=3"></script>
-  <script src="js/modelo3d.js?v=3"></script>
-  <script src="js/simulacoes2d.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/dados.js?v=8"></script>
+  <script src="js/imagens.js?v=8"></script>
+  <script src="js/setas.js?v=8"></script>
+  <script src="js/sentidos.js?v=8"></script>
+  <script src="js/modelo3d.js?v=8"></script>
+  <script src="js/simulacoes2d.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>
