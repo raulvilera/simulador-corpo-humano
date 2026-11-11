@@ -13,7 +13,8 @@
   /* cores extras (somam-se à paleta do corpo) */
   const PAL = {
     meato: [0xe2ae98, { roughness: 0.6, transparent: true, opacity: 0.55 }], timpano: [0xeed8cc, { roughness: 0.3, transparent: true, opacity: 0.85, clearcoat: 0.6 }],
-    ossiculo: [0xf0e4c4, { roughness: 0.45, clearcoat: 0.3 }], vestibulo: [0xc4b0ea, { roughness: 0.35, clearcoat: 0.5 }], canal_sc: [0x8fbcef, { roughness: 0.35, clearcoat: 0.5 }],
+    ossiculo: [0xf0e4c4, { roughness: 0.45, clearcoat: 0.3 }], martelo: [0xf4e3ad, { roughness: 0.42, clearcoat: 0.35 }], bigorna: [0xe6bd8c, { roughness: 0.42, clearcoat: 0.35 }],
+    estribo: [0xfbf4e0, { roughness: 0.4, clearcoat: 0.4 }], vestibulo: [0xc4b0ea, { roughness: 0.35, clearcoat: 0.5 }], canal_sc: [0x8fbcef, { roughness: 0.35, clearcoat: 0.5 }],
     coclea: [0xf2a99a, { roughness: 0.35, clearcoat: 0.5 }], tuba: [0xe6b1aa, { roughness: 0.5, transparent: true, opacity: 0.8 }],
     epitelio_olf: [0xf0c94a, { roughness: 0.45, clearcoat: 0.3 }], bulbo: [0xf3d36b, { roughness: 0.4, clearcoat: 0.3 }], cribriforme: [0xe6dcc3, { roughness: 0.7 }],
     concha: [0xe59a96, { roughness: 0.45, clearcoat: 0.4 }], septo: [0xd9c3c0, { roughness: 0.5, transparent: true, opacity: 0.35 }],
@@ -42,65 +43,113 @@
     m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); return marca(m, id);
   }
 
+  // Tubo orgânico de raio variável: `raios` tem um valor por ponto de controle (ou é uma
+  // função de t em [0,1]). Pontas fechadas em cúpula, salvo op.aberto.
+  function tuboVar(M, pts, raios, id, key, segs, op) {
+    op = op || {};
+    const c = new T.CatmullRomCurve3(pts, false, "centripetal"), n = segs || Math.max(24, pts.length * 12), nr = op.lados || 14;
+    const R = typeof raios === "function" ? raios : t => {
+      const x = t * (raios.length - 1), i = Math.min(raios.length - 2, Math.floor(x)), f = x - i, s = f * f * (3 - 2 * f);
+      return raios[i] + (raios[i + 1] - raios[i]) * s;
+    };
+    const pos = [], idx = [], P = V(0, 0, 0), tg = V(0, 0, 0), N = V(0, 0, 0), B = V(0, 0, 0);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n; c.getPoint(t, P); c.getTangent(t, tg);
+      if (i === 0) { N.set(0, 1, 0); if (Math.abs(tg.y) > 0.9) N.set(1, 0, 0); }
+      N.addScaledVector(tg, -N.dot(tg)).normalize(); B.crossVectors(tg, N);
+      const r = R(t);
+      for (let j = 0; j < nr; j++) { const a = j / nr * Math.PI * 2, cs = Math.cos(a) * r, sn = Math.sin(a) * r; pos.push(P.x + N.x * cs + B.x * sn, P.y + N.y * cs + B.y * sn, P.z + N.z * cs + B.z * sn); }
+      if (i === 0 || i === n) { const k = (i === 0 ? -0.55 : 0.55) * r; pos.push(P.x + tg.x * k, P.y + tg.y * k, P.z + tg.z * k); }   // centro da cúpula
+    }
+    const anel = i => i === 0 ? 0 : i * nr + 1, c0 = nr, c1 = (n + 1) * nr + 1;
+    for (let i = 0; i < n; i++) for (let j = 0; j < nr; j++) {
+      const a = anel(i) + j, b = anel(i) + (j + 1) % nr, d = anel(i + 1) + j, e = anel(i + 1) + (j + 1) % nr;
+      idx.push(a, b, d, b, e, d);
+    }
+    if (!op.aberto) for (let j = 0; j < nr; j++) { idx.push(c0, (j + 1) % nr, j, c1, anel(n) + j, anel(n) + (j + 1) % nr); }
+    const geo = new T.BufferGeometry(); geo.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const m = new T.Mesh(geo, M(id, key)); m.userData.curva = c; return marca(m, id);
+  }
+
   /* ======================= ORELHA (externa, média e interna) =================
-     Referencial em cm: lateral = -X; entrada do meato em x = -2,5; tímpano em x ≈ 0. */
+     Referencial em cm: lateral = -X, cima = +Y, frente = +Z; tímpano na origem.
+     op.amplia: fator de ampliação da orelha média e interna (na Lupa, como nos
+     atlas, elas são desenhadas maiores que o pavilhão para ficarem legíveis).
+     op.entrada: x da abertura do meato; op.compacto: tuba auditiva e nervo resumidos. */
   function construirOrelha(M, op) {
     op = op || {};
+    const A = op.amplia || 1, ex = op.entrada || -2.55;
     const g = new T.Group(); g.name = "orelha_detalhe"; const pecas = {};
-    const add = (m, k) => { g.add(m); (pecas[k || m.userData.id] ||= []).push(m); return m; };
-    // meato acústico externo
-    if (op.meato !== false) add(tubo(M, [V(-2.55, 0.05, 0.05), V(-1.9, 0.12, 0.12), V(-1.1, 0.02, 0.18), V(-0.08, 0, 0.05)], 0.34, "meato_acustico", "meato"));
-    // membrana timpânica (cone raso, ápice = umbigo voltado para dentro)
-    const tp = new T.Mesh(new T.ConeGeometry(0.45, 0.14, 40, 1, true), M("timpano", "timpano"));
-    tp.material.side = T.DoubleSide; tp.rotation.z = -Math.PI / 2; tp.rotation.y = -0.5; tp.position.set(0, 0, 0.05);
-    add(marca(tp, "timpano"));
-    // ossículos
-    const osso = (a, b, r, id, r2) => add(cil(M, a, b, r, id, "ossiculo", r2), id);
-    const umbigo = V(0.06, -0.05, 0.05), cabM = V(0.16, 0.48, 0.02);
-    osso(umbigo, V(0.12, 0.3, 0.03), 0.035, "martelo", 0.045); osso(V(0.12, 0.3, 0.03), cabM, 0.05, "martelo", 0.06);
-    add(esfera(M, cabM, 0.1, "martelo", "ossiculo", [1, 1.15, 1]), "martelo");
-    osso(V(0.14, 0.35, 0.02), V(0.26, 0.38, 0.12), 0.025, "martelo");
-    const corpoB = V(0.31, 0.46, -0.04);
-    add(esfera(M, corpoB, 0.1, "bigorna", "ossiculo", [1, 1.1, 0.9]), "bigorna");
-    osso(corpoB, V(0.36, 0.55, -0.3), 0.04, "bigorna", 0.025);           // ramo curto
-    osso(corpoB, V(0.36, 0.08, -0.02), 0.035, "bigorna", 0.03);          // ramo longo
-    add(esfera(M, V(0.37, 0.06, -0.01), 0.035, "bigorna", "ossiculo"), "bigorna");
-    const cabE = V(0.42, 0.05, 0), base = V(0.64, 0.02, 0);
-    add(esfera(M, cabE, 0.04, "estribo", "ossiculo"), "estribo");
-    [-1, 1].forEach(s => add(tubo(M, [cabE, V(0.52, 0.04, 0.06 * s), base.clone().add(V(0, 0.02, 0.09 * s))], 0.016, "estribo", "ossiculo", 16), "estribo"));
-    const pe = new T.Mesh(new T.CylinderGeometry(0.1, 0.1, 0.03, 24), M("estribo", "ossiculo")); pe.scale.set(1, 1, 0.55); pe.rotation.z = Math.PI / 2; pe.position.copy(base); add(marca(pe, "estribo"));
-    // orelha interna: vestíbulo
-    const vest = V(0.86, 0.06, -0.06);
-    add(esfera(M, vest, 0.24, "vestibulo", "vestibulo", [0.9, 1.2, 0.85]));
-    // canais semicirculares (três planos perpendiculares) com ampolas
-    const canal = (centro, rot, amp) => {
-      const t = new T.Mesh(new T.TorusGeometry(0.33, 0.045, 10, 48, Math.PI * 1.55), M("canais_semicirculares", "canal_sc"));
-      t.position.copy(centro); t.rotation.set(...rot); add(marca(t, "canais_semicirculares"));
-      add(esfera(M, amp, 0.08, "canais_semicirculares", "canal_sc"));
+    const dentro = new T.Group(); dentro.scale.setScalar(A); g.add(dentro);
+    const add = (m, pai) => { (pai || dentro).add(m); (pecas[m.userData.id] ||= []).push(m); return m; };
+    const elips = (p, r, id, key, s, rot) => { const m = new T.Mesh(new T.SphereGeometry(r, 32, 22), M(id, key)); m.position.copy(p); if (s) m.scale.set(...s); if (rot) m.rotation.set(...rot); return add(marca(m, id)); };
+
+    // ---- orelha externa: meato acústico (canal em S que se alarga até o tímpano)
+    if (op.meato !== false) add(tuboVar(M, [V(ex, 0.05, 0.05), V(ex * 0.7, 0.14, 0.12), V(ex * 0.35, 0.02, 0.1), V(-0.03 * A, 0, 0.02)],
+      [0.36, 0.32, 0.3 + 0.1 * A, 0.47 * A], "meato_acustico", "meato", 48, { aberto: true, lados: 28 }), g);
+
+    // ---- membrana timpânica: cone raso e côncavo (umbigo para dentro) + anel timpânico
+    const perfil = []; for (let i = 0; i <= 14; i++) { const r = 0.45 * i / 14; perfil.push(new T.Vector2(Math.max(r, 0.0005), 0.13 * Math.pow(1 - i / 14, 1.35))); }
+    const tp = new T.Mesh(new T.LatheGeometry(perfil, 48), M("timpano", "timpano"));
+    tp.material.side = T.DoubleSide; tp.material.userData.lado0 = T.DoubleSide;
+    const incl = new T.Group(); incl.rotation.y = -0.32; dentro.add(incl);          // o tímpano é inclinado em relação ao canal
+    tp.rotation.z = -Math.PI / 2; incl.add(marca(tp, "timpano")); pecas.timpano = [tp];
+    const anelT = new T.Mesh(new T.TorusGeometry(0.455, 0.022, 10, 56), M("timpano", "timpano")); anelT.rotation.y = Math.PI / 2; incl.add(marca(anelT, "timpano")); pecas.timpano.push(anelT);
+
+    // ---- ossículos
+    // martelo: cabo preso ao tímpano (do umbigo para cima), colo e cabeça arredondada
+    add(tuboVar(M, [V(0.135, -0.01, 0.04), V(0.085, 0.2, 0.02), V(0.07, 0.36, 0.01), V(0.11, 0.47, 0), V(0.19, 0.6, -0.02), V(0.225, 0.69, -0.03)],
+      [0.028, 0.033, 0.04, 0.043, 0.105, 0.075], "martelo", "martelo", 56));
+    elips(V(0.045, 0.385, 0.03), 0.04, "martelo", "martelo", [1.2, 0.9, 0.9]);                                     // processo lateral
+    add(tuboVar(M, [V(0.1, 0.44, 0.02), V(0.13, 0.43, 0.12), V(0.15, 0.4, 0.2)], [0.03, 0.022, 0.012], "martelo", "martelo", 16));  // processo anterior
+    // bigorna: corpo articulado à cabeça do martelo, ramo curto (para trás) e ramo longo (desce até o estribo)
+    elips(V(0.355, 0.62, -0.05), 0.115, "bigorna", "bigorna", [1.12, 1, 0.9]);
+    add(tuboVar(M, [V(0.37, 0.64, -0.08), V(0.42, 0.67, -0.24), V(0.455, 0.665, -0.38)], [0.085, 0.06, 0.03], "bigorna", "bigorna", 24));
+    add(tuboVar(M, [V(0.37, 0.6, -0.05), V(0.42, 0.42, -0.03), V(0.45, 0.22, -0.01), V(0.47, 0.12, 0), V(0.515, 0.1, 0)], [0.085, 0.05, 0.038, 0.033, 0.042], "bigorna", "bigorna", 40));
+    // estribo: cabeça, dois ramos em arco e base oval encaixada na janela oval do vestíbulo
+    const dE = V(0, 0.77, 0.64), cabE = V(0.565, 0.1, 0), baseE = V(0.795, 0.1, 0);
+    elips(cabE, 0.048, "estribo", "estribo", [1.2, 1, 1]);
+    [-1, 1].forEach(s => add(tuboVar(M, [cabE.clone().add(V(0.02, 0, 0)), V(0.66, 0.1, 0).addScaledVector(dE, 0.1 * s), baseE.clone().addScaledVector(dE, 0.095 * s)],
+      [0.026, 0.022, 0.024], "estribo", "estribo", 24)));
+    elips(baseE, 1, "estribo", "estribo", [0.02, 0.135, 0.075], [Math.atan2(dE.z, dE.y), 0, 0]);
+
+    // ---- orelha interna (labirinto)
+    const vest = V(1.0, 0.14, -0.06);
+    elips(vest, 1, "vestibulo", "vestibulo", [0.2, 0.25, 0.21]);
+    // canais semicirculares: três arcos em planos quase perpendiculares, cada um com sua ampola
+    const canal = (centro, u, w, R, a0, a1, tAmp) => {
+      const pts = [], N = 14; u.normalize(); w.normalize();
+      for (let i = 0; i <= N; i++) { const a = (a0 + (a1 - a0) * i / N) * Math.PI / 180; pts.push(centro.clone().addScaledVector(u, Math.cos(a) * R).addScaledVector(w, Math.sin(a) * R)); }
+      pts.unshift(pts[0].clone().lerp(vest, 0.65)); pts.push(pts[pts.length - 1].clone().lerp(vest, 0.65));
+      add(tuboVar(M, pts, t => 0.043 + 0.05 * Math.exp(-Math.pow((t - tAmp) / 0.055, 2)), "canais_semicirculares", "canal_sc", 96, { lados: 12 }));
     };
-    canal(V(1.0, 0.62, -0.18), [0, Math.PI / 4, -0.6], V(0.82, 0.38, 0.06));          // anterior
-    canal(V(1.08, 0.5, -0.55), [0, -Math.PI / 4, 0.9], V(1.02, 0.02, -0.32));         // posterior
-    canal(V(0.98, 0.26, -0.48), [Math.PI / 2, 0, 0.5], V(0.68, 0.26, -0.18));         // lateral
-    // cóclea: espiral de 2,75 voltas que afina para o ápice
-    const espiral = new T.Group(); const voltas = 2.75, N = 6;
-    for (let k = 0; k < N; k++) {
-      const pts = [];
-      for (let i = 0; i <= 24; i++) {
-        const u = (k + i / 24) / N, th = u * voltas * Math.PI * 2, r = 0.46 * (1 - 0.72 * u);
-        pts.push(V(Math.cos(th) * r, Math.sin(th) * r, u * 0.5));
+    const h1 = V(0.8, 0, 0.6), h2 = V(0.6, 0, -0.8), cima = V(0, 1, 0);
+    canal(vest.clone().add(V(0.05, 0.52, -0.02)), h1.clone(), cima.clone(), 0.3, -55, 235, 0.13);                                   // anterior (superior)
+    canal(vest.clone().addScaledVector(h2, 0.34).add(V(0, 0.3, 0)), h2.clone(), cima.clone(), 0.28, 160, -150, 0.87);              // posterior
+    const uL = V(-0.6, 0.25, -0.75).normalize();
+    canal(vest.clone().addScaledVector(uL, 0.33).add(V(0, 0.1, 0)), uL.clone(), V(0.78, 0.1, -0.6), 0.25, 140, -140, 0.13);        // lateral (horizontal)
+    // cóclea: caracol contínuo de 2,6 voltas que sai do vestíbulo e afina até o ápice
+    (function () {
+      const centro = V(1.3, -0.38, 0.2), q = new T.Quaternion().setFromUnitVectors(V(0, 0, 1), V(-0.3, -0.3, 0.9).normalize());
+      const vl = vest.clone().sub(centro).applyQuaternion(q.clone().invert()), th0 = Math.atan2(vl.y, vl.x) + 0.35;
+      const voltas = 2.6, N = 60, R0 = 0.36, pts = [], raios = [];
+      for (let i = 0; i <= N; i++) {
+        const u = i / N, th = th0 - u * voltas * Math.PI * 2, r = R0 * (1 - 0.8 * u);
+        pts.push(V(Math.cos(th) * r, Math.sin(th) * r, 0.44 * Math.pow(u, 0.85)).applyQuaternion(q).add(centro)); raios.push((0.42 * r + 0.012) * (u > 0.94 ? 1 - 0.5 * (u - 0.94) / 0.06 : 1));
       }
-      const m = tubo(M, pts, 0.12 * (1 - 0.6 * k / N), "coclea", "coclea", 48); espiral.add(m); (pecas.coclea ||= []).push(m);
-    }
-    espiral.position.set(0.95, -0.2, 0.32);
-    espiral.quaternion.setFromUnitVectors(V(0, 0, 1), V(-0.45, -0.35, 0.82).normalize());
-    g.add(espiral);
-    add(tubo(M, [V(0.8, -0.05, 0.12), V(0.88, -0.12, 0.25)], 0.09, "coclea", "coclea"));
-    // nervo vestibulococlear
-    add(tubo(M, [V(1.0, -0.15, 0.32), V(1.4, -0.05, 0.22), V(2.0, 0.02, 0.16), V(2.7, 0.1, 0.1)], 0.1, "nervo_vestibulococlear", "nervo"));
-    add(tubo(M, [vest.clone().add(V(0.1, 0, 0)), V(1.35, -0.02, 0.1), V(1.7, -0.02, 0.15)], 0.06, "nervo_vestibulococlear", "nervo"));
-    // tuba auditiva (até a faringe)
-    add(tubo(M, [V(0.3, -0.32, 0.22), V(0.9, -0.7, 0.9), V(1.6, -1.25, 1.8), V(2.2, -1.8, 2.7)], 0.09, "tuba_auditiva", "tuba"));
-    g.userData.pecas = pecas;
+      pts.unshift(pts[0].clone().lerp(vest, 0.6)); raios.unshift(raios[0] * 0.9);
+      add(tuboVar(M, pts, raios, "coclea", "coclea", 360, { lados: 18 }));
+    })();
+    // nervo vestibulococlear: ramo coclear + ramo vestibular que se unem num tronco
+    const uniao = V(2.05, 0.08, -0.14);
+    add(tuboVar(M, [V(1.33, -0.35, 0.1), V(1.75, -0.2, -0.1), uniao], [0.075, 0.075, 0.09], "nervo_vestibulococlear", "nervo", 32));
+    add(tuboVar(M, [vest.clone().add(V(0.12, 0.03, -0.05)), V(1.55, 0.26, -0.12), uniao], [0.055, 0.058, 0.08], "nervo_vestibulococlear", "nervo", 32));
+    add(tuboVar(M, [uniao.clone().add(V(-0.1, 0, 0)), V(2.2, 0.09, -0.17), op.compacto ? V(2.38, 0.11, -0.2) : V(2.7, 0.16, -0.28)], [0.105, 0.12, 0.125], "nervo_vestibulococlear", "nervo", 32));
+    // tuba auditiva: sai do assoalho da orelha média, estreita-se (istmo) e alarga-se rumo à faringe
+    add(tuboVar(M, op.compacto
+      ? [V(0.42, -0.36, 0.2), V(0.72, -0.68, 0.42), V(1.05, -1.0, 0.66), V(1.32, -1.26, 0.86)]
+      : [V(0.42, -0.36, 0.2), V(0.9, -0.7, 0.9), V(1.6, -1.25, 1.8), V(2.2, -1.8, 2.7)], [0.1, 0.06, 0.085, 0.14], "tuba_auditiva", "tuba", 40, { lados: 16 }));
+    g.userData.pecas = pecas; g.userData.amplia = A; g.userData.entrada = ex;
     return g;
   }
 
@@ -279,6 +328,7 @@
         <b class="lupa-titulo">🔬 Lupa dos sentidos</b>
         <div class="lupa-abas">${Object.entries(ORGAOS).map(([k, o]) => `<button data-lupa="${k}">${o.icone} ${o.nome}</button>`).join("")}</div>
         <div class="lupa-acoes">
+          <button id="lupaListaBtn" title="Mostrar ou ocultar a lista de estruturas">☰ Lista</button>
           <button id="lupaCorte" title="Cortar ao meio">✂️ Corte</button>
           <button id="lupaRot" class="ativo" title="Mostrar nomes com setas">🏷️ Rótulos</button>
           <button id="lupaFechar" title="Voltar ao corpo">✕ Voltar ao corpo</button>
@@ -292,6 +342,9 @@
     wrap.appendChild(div);
     div.querySelectorAll("[data-lupa]").forEach(b => b.onclick = () => abrir(b.dataset.lupa));
     div.querySelector("#lupaFechar").onclick = fechar;
+    const btL = div.querySelector("#lupaListaBtn"), lista = v => { div.classList.toggle("sem-lista", !v); btL.classList.toggle("ativo", v); redim(); };
+    btL.onclick = () => lista(div.classList.contains("sem-lista"));
+    div._lista = lista;
     div.querySelector("#lupaCorte").onclick = e => { ctx.corte = !ctx.corte; e.currentTarget.classList.toggle("ativo", ctx.corte); aplicarCorte(); };
     div.querySelector("#lupaRot").onclick = e => { ctx.rotulos = !ctx.rotulos; e.currentTarget.classList.toggle("ativo", ctx.rotulos); document.getElementById("lupaRotulos").hidden = !ctx.rotulos; zoomRotulos(); };
     return div;
@@ -355,11 +408,15 @@
     const res = [];
     APPREF.pecas.filter(p => ids.includes(p.userData.id)).forEach(p => {
       p.updateWorldMatrix(true, false);
-      const geo = p.geometry.clone(); geo.applyMatrix4(p.matrixWorld);
+      let geo = p.geometry.clone(); geo.applyMatrix4(p.matrixWorld);
       if (filtro) { // mantém só triângulos que passam no filtro (ex.: lado direito)
         const pos = geo.attributes.position, I = geo.index.array, ni = [];
         for (let t = 0; t < I.length; t += 3) { const cx = (pos.getX(I[t]) + pos.getX(I[t + 1]) + pos.getX(I[t + 2])) / 3; if (filtro(cx)) ni.push(I[t], I[t + 1], I[t + 2]); }
-        geo.setIndex(ni);
+        // descarta os vértices não usados (ex.: os da outra orelha), para que caixa
+        // envolvente, enquadramento e setas considerem só a parte mantida
+        const mapa = new Map(), np = [], nn = [], nor = geo.attributes.normal;
+        const idx = ni.map(i => { let j = mapa.get(i); if (j === undefined) { j = mapa.size; mapa.set(i, j); np.push(pos.getX(i), pos.getY(i), pos.getZ(i)); if (nor) nn.push(nor.getX(i), nor.getY(i), nor.getZ(i)); } return j; });
+        geo = new T.BufferGeometry(); geo.setAttribute("position", new T.Float32BufferAttribute(np, 3)); if (nor) geo.setAttribute("normal", new T.Float32BufferAttribute(nn, 3)); geo.setIndex(idx);
       }
       res.push({ id: p.userData.id, geo, key: p.material.userData.chave || p.userData.id });
     });
@@ -380,9 +437,10 @@
       const pav = clonarDoCorpo(["pavilhao"], x => x < 0);
       const cxp = new T.Box3(); pav.forEach(p => { p.geo.computeBoundingBox(); cxp.union(p.geo.boundingBox); });
       const ent = V(cxp.max.x - 0.02, cxp.min.y + (cxp.max.y - cxp.min.y) * 0.42, cxp.min.z + (cxp.max.z - cxp.min.z) * 0.62);
-      pav.forEach(p => { p.geo.translate(-ent.x, -ent.y, -ent.z); p.geo.scale(10, 10, 10); p.geo.translate(-2.55, 0, 0); p.geo.computeVertexNormals(); const m = new T.Mesh(p.geo, M("pavilhao", "orelha")); marca(m, "pavilhao"); raiz.add(m); });
-      const ore = construirOrelha(M); raiz.add(ore); raiz.userData.orelha = ore;
-      cam = [V(-1.5, 2.2, 7.5), V(0, 0, 0.3)];
+      pav.forEach(p => { p.geo.translate(-ent.x, -ent.y, -ent.z); p.geo.scale(6, 6, 6); p.geo.translate(-1.9, 0, 0); p.geo.computeVertexNormals(); const m = new T.Mesh(p.geo, M("pavilhao", "orelha")); marca(m, "pavilhao"); raiz.add(m); });
+      // como nos atlas, a orelha média e a interna aparecem ampliadas em relação ao pavilhão
+      const ore = construirOrelha(M, { amplia: 1.9, entrada: -1.9, compacto: true }); raiz.add(ore); raiz.userData.orelha = ore;
+      cam = [V(-1.2, 1.7, 9), V(0, 0, 0)];
       demo = demoOrelha(ore);
     } else if (org === "nariz") {
       const pecas = clonarDoCorpo(["cartilagens_nasais", "conchas_nasais"]);
@@ -416,7 +474,9 @@
 
   async function abrir(org, parte) {
     if (!ctx) criarContexto();
-    ctx.div.hidden = false; redim();
+    ctx.div.hidden = false;
+    if (!ctx.listaDefinida) { ctx.listaDefinida = true; ctx.div._lista(ctx.div.clientWidth >= 900); }   // em telas estreitas a lista começa recolhida: mais espaço para o modelo
+    redim();
     ctx.div.querySelectorAll("[data-lupa]").forEach(b => b.classList.toggle("ativo", b.dataset.lupa === org));
     if (ctx.org !== org) {
       if (ctx.raiz) { ctx.cena.remove(ctx.raiz); }
@@ -551,6 +611,7 @@
 
   function demoOrelha(ore) {
     const P = ore.userData.pecas; let tocando = false, t = 0;
+    const xe = ore.userData.entrada || -2.55, x0 = xe - 3.2;   // entrada do meato e ponto de partida das ondas
     const ondas = [0, 1, 2].map(() => { const o = new T.Mesh(new T.TorusGeometry(0.5, 0.03, 6, 40), new T.MeshBasicMaterial({ color: 0x4cc9f0, transparent: true })); o.rotation.y = Math.PI / 2; o.visible = false; ore.add(o); return o; });
     const base = id => (P[id] || []).map(m => [m, m.position.clone()]);
     const oss = [...base("martelo"), ...base("bigorna"), ...base("estribo")], tp = P.timpano ? P.timpano[0] : null;
@@ -558,12 +619,17 @@
     return {
       montar(el) {
         el.innerHTML = `<div class="lupa-demo-tit">🔊 Caminho do som</div><div class="chips"><button class="chip" id="btnSom">▶ Tocar som</button></div>
-          <p class="mini-txt">As ondas sonoras entram pelo <b>meato acústico</b> e fazem o <b>tímpano</b> vibrar. Os ossículos (<b>martelo → bigorna → estribo</b>) amplificam a vibração e o estribo empurra a janela oval. O líquido da <b>cóclea</b> vibra, as células ciliadas geram impulsos e o <b>nervo vestibulococlear</b> os leva ao lobo temporal. O <b>vestíbulo</b> e os <b>canais semicirculares</b> cuidam do equilíbrio.</p>`;
+          <p class="mini-txt">As ondas sonoras entram pelo <b>meato acústico</b> e fazem o <b>tímpano</b> vibrar. Os ossículos (<b>martelo → bigorna → estribo</b>) amplificam a vibração e o estribo empurra a janela oval. O líquido da <b>cóclea</b> vibra, as células ciliadas geram impulsos e o <b>nervo vestibulococlear</b> os leva ao lobo temporal. O <b>vestíbulo</b> e os <b>canais semicirculares</b> cuidam do equilíbrio.</p>
+          <p class="mini-txt muted">🔍 Para facilitar a observação, a orelha média e a orelha interna estão ampliadas em relação ao pavilhão, como nas ilustrações dos atlas.</p>`;
         el.querySelector("#btnSom").onclick = e => { tocando = !tocando; e.currentTarget.textContent = tocando ? "⏸ Parar" : "▶ Tocar som"; if (!tocando) { ondas.forEach(o => o.visible = false); brilho(P.coclea, 0, 0); brilho(P.nervo_vestibulococlear, 0, 0); } };
       },
       passo(dt) {
         if (!tocando) return; t += dt;
-        ondas.forEach((o, i) => { const f = ((t * 0.8 + i / 3) % 1); o.visible = true; o.position.set(-6 + f * 3.4, 0.05, 0.05); o.scale.setScalar(2.2 - f * 1.4); o.material.opacity = 1 - f * 0.6; });
+        // as ondas chegam pelo ar, estreitam-se na entrada do meato e seguem pelo canal até o tímpano
+        ondas.forEach((o, i) => {
+          const f = ((t * 0.6 + i / 3) % 1), x = x0 + f * (-0.25 - x0), k = Math.min(1, Math.max(0, (x - x0) / (xe - x0)));
+          o.visible = true; o.position.set(x, 0.06, 0.07); o.scale.setScalar(x < xe ? 2.2 - 1.65 * k : 0.55 + 0.5 * (x - xe) / -xe); o.material.opacity = 1 - f * 0.55;
+        });
         const vib = Math.sin(t * 40);
         if (tp) tp.scale.set(1, 1 + 0.25 * vib, 1);
         oss.forEach(([m, p0]) => m.position.set(p0.x + 0.02 * vib, p0.y, p0.z));

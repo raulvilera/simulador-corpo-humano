@@ -111,6 +111,31 @@
       m.needsUpdate = true;
     });
     grupos[sist].visible = est.visivel[sist] && o > 0.01;
+    aplicarCompartilhados();
+  }
+  /* Órgãos compartilhados: uma estrutura pode pertencer a mais de um sistema (campo "tambem" em dados.js).
+     Ex.: o pâncreas é do Digestório e do Endócrino — aparece quando qualquer um dos dois está ligado. */
+  const ativo = s => est.visivel[s] && est.opac[s] > 0.01;
+  function outrosSistemas(id) {
+    const e = D.estruturas[id]; if (!e) return null;
+    return e.tambem || (e.orgao && D.estruturas[e.orgao] && D.estruturas[e.orgao].tambem) || null;
+  }
+  function sistemasDe(id) { const e = D.estruturas[id]; return e ? [e.sistema].concat(outrosSistemas(id) || []) : []; }
+  const compartilhadas = pecas.filter(m => outrosSistemas(m.userData.id));
+  const casasCompart = Array.from(new Set(compartilhadas.map(m => m.userData.sistema)));
+  function aplicarCompartilhados() {
+    const emprestada = m => { const o = outrosSistemas(m.userData.id); return !!o && o.some(ativo); };
+    casasCompart.forEach(casa => {
+      const on = ativo(casa), emprestimo = !on && compartilhadas.some(m => m.userData.sistema === casa && emprestada(m));
+      grupos[casa].visible = on || emprestimo;
+      grupos[casa].traverse(o => { if (o.isMesh && !o.userData.particula) o.visible = on || (emprestimo && emprestada(o)); });
+    });
+    compartilhadas.forEach(m => {
+      const vis = [m.userData.sistema].concat(outrosSistemas(m.userData.id)).filter(ativo); if (!vis.length) return;
+      const o = Math.max.apply(null, vis.map(s => est.opac[s])), mt = m.material;
+      const ob = mt.userData.opBase === undefined ? 1 : mt.userData.opBase;
+      mt.opacity = ob * o; mt.transparent = mt.userData.transpBase || o < 1; mt.depthWrite = o > 0.5; mt.needsUpdate = true;
+    });
   }
   function aplicarTudo() { Object.keys(D.sistemas).forEach(aplicarOpacidade); atualizarListaSistemas(); }
 
@@ -325,7 +350,7 @@
     }
     const s = D.sistemas[e.sistema];
     const cods = bnccDoSistema(e.sistema);
-    const img = (window.IMAGENS || {})[id];
+    const img = (window.IMAGENS || {})[id] || (window.IMAGENS || {})[e.img];
     painelInfo.innerHTML = `
       <div class="cartao">
         <div class="etiqueta" style="--c:${s.cor}">${s.nome}</div>
@@ -339,6 +364,7 @@
         ${e.curiosidade ? `<div class="destaque curioso"><b>Você sabia?</b> ${e.curiosidade}</div>` : ""}
         ${e.saude ? `<div class="destaque saude"><b>Saúde e prevenção:</b> ${e.saude}</div>` : ""}
         ${cods.length ? `<h4>Habilidades BNCC relacionadas</h4><div class="chips">${cods.map(c => `<button class="chip" data-bncc="${c}">${c}</button>`).join("")}</div>` : ""}
+        ${e.tambem ? `<p class="mini-txt muted">Também faz parte do sistema: ${e.tambem.map(x => D.sistemas[x].nome).join(", ")}</p>` : ""}
         ${e.orgao && D.estruturas[e.orgao] ? `<p class="mini-txt muted">Faz parte de: <a href="#" id="lnkOrgao">${D.estruturas[e.orgao].nome}</a></p>` : ""}
         <div class="acoes">
           ${lupaDe(id) && !daLupa ? `<button class="btn destaque-btn" id="btnLupaInfo">Ver em detalhe</button>` : ""}
@@ -381,7 +407,7 @@
   }
   function mostrarSistema(id) {
     const s = D.sistemas[id];
-    const estr = Object.entries(D.estruturas).filter(([, e]) => e.sistema === id);
+    const estr = Object.entries(D.estruturas).filter(([, e]) => e.sistema === id || (e.tambem && e.tambem.includes(id)));
     trocarAba("explorar");
     painelInfo.innerHTML = `<div class="cartao"><div class="etiqueta" style="--c:${s.cor}">Sistema</div><h2>${s.nome}</h2><p>${s.descricao}</p>
       <h4>Estruturas (clique para localizar)</h4><div class="chips">${estr.filter(([, e]) => !e.soLupa).map(([k, e]) => `<button class="chip" data-estr="${k}">${e.nome}</button>`).join("")}</div>
@@ -421,7 +447,10 @@
 
   /* ------------------------------ RÓTULOS ------------------------------- */
   const camadaRot = $("#rotulos");
-  const ROT = ["cerebro", "cerebelo", "olho", "coracao", "pulmao_d", "pulmao_e", "figado", "estomago", "intestino_delgado", "intestino_grosso", "rim_d", "rim_e", "bexiga", "cranio", "coluna", "costelas", "femur", "umero", "traqueia", "esofago", "tireoide", "baco", "pancreas", "diafragma", "biceps", "quadriceps", "deltoide", "aorta", "medula", "utero", "testiculos", "ovarios", "timo"];
+  const ROT = ["cerebro", "cerebelo", "olho", "coracao", "pulmao_d", "pulmao_e", "figado", "estomago", "intestino_delgado", "intestino_grosso", "rim_d", "rim_e", "bexiga", "cranio", "coluna", "costelas", "femur", "umero", "traqueia", "esofago", "tireoide", "baco", "pancreas", "diafragma", "biceps", "quadriceps", "deltoide", "aorta", "medula", "utero", "testiculos", "ovarios", "timo", "glandulas_salivares", "uretra"];
+  // nomes dos nervos: só aparecem quando poucos sistemas estão visíveis, para não poluir o corpo completo
+  const ROT_NERVOS = new Set(["nervo_facial", "nervo_vago", "nervo_frenico", "nervos_intercostais", "nervo_radial", "nervo_mediano", "nervo_ulnar", "nervo_femoral", "nervo_isquiatico", "nervo_tibial", "nervo_fibular"]);
+  ROT.push(...ROT_NERVOS);
   // Setas: nomes nas margens da área 3D, com seta até a superfície da estrutura.
   var setasCorpo = SETAS.criar(camadaRot);   // var: pode ser consultada antes desta linha
   ROT.forEach(id => setasCorpo.adicionar(id, D.estruturas[id].nome, () => selecionar(id, true)));
@@ -430,9 +459,10 @@
   function atualizarRotulos() {
     if (!est.rotulos) return;
     const w = palco.clientWidth, h = palco.clientHeight, pts = [];
+    const poucos = Object.keys(D.sistemas).filter(s => s !== "tegumentar" && est.visivel[s] && est.opac[s] >= 0.15).length <= 3;
     ROT.forEach(id => {
-      const s = D.estruturas[id].sistema;
-      if (!est.visivel[s] || est.opac[s] < 0.15) return;
+      if (ROT_NERVOS.has(id) && !poucos) return;
+      if (!sistemasDe(id).some(s => est.visivel[s] && est.opac[s] >= 0.15)) return;
       const a = SETAS.ancora(amostrasDe(id), camera, T, null, visivelDeFato); if (!a) return;
       const v = a.project(camera);
       if (v.z > 1 || Math.abs(v.x) > 0.98 || Math.abs(v.y) > 0.98) return;
