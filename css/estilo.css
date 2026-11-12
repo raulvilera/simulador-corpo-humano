@@ -369,3 +369,12 @@ hr { border: 0; border-top: 1px solid var(--borda-suave); margin: 16px 0; }
 .seta-rotulo:hover, .seta-rotulo.ativo { background: var(--acento); color: var(--sobre-acento); }
 @media (max-width: 760px) { .seta-rotulo { max-width: 96px; font-size: .64rem; padding: 2px 5px; } }
 #lupaRotulos .seta-rotulo { max-width: 125px; }
+
+/* Drogas psicoativas: sinapse animada e traçado da atividade */
+.cv-sinapse { display: block; width: 100%; height: 250px; margin-top: 10px; border-radius: 12px; background: var(--card2); border: 1px solid var(--borda-suave); }
+.cv-ativ { display: block; width: 100%; height: 74px; margin-top: 8px; border-radius: 10px; background: var(--card); border: 1px solid var(--borda-suave); }
+.legenda-sin { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 0; font-size: .74rem; color: var(--muted); }
+.legenda-sin span { display: inline-flex; align-items: center; gap: 5px; }
+.legenda-sin i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.legenda-sin i.bola { border-radius: 50%; }
+.legenda-sin i.losango { transform: rotate(45deg) scale(.85); }
