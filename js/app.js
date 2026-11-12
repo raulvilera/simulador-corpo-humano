@@ -571,6 +571,28 @@
       <div class="destaque" id="txtSubst">${SUBST.nenhuma.txt}</div>
     </div>
 
+    <div class="cartao sim" id="simDrogas">
+      <h3>🧠 Drogas psicoativas e atividade cerebral <span class="cod">EM13CNT207 · EF06CI10</span></h3>
+      <p class="muted">Drogas psicoativas agem nas <b>sinapses</b>, o ponto em que um neurônio passa o sinal ao seguinte. Escolha um tipo e veja o que muda na sinapse e na atividade do cérebro.</p>
+      <div class="linha-btn" id="tiposDroga">${Object.entries(DROGAS.MODOS).map(([k, m]) => `<button class="btn ${k === "nenhuma" ? "ativo" : ""}" data-droga="${k}">${m.rotulo}</button>`).join("")}</div>
+      <p class="mini-txt muted" id="exDroga"></p>
+      <canvas id="cvSinapse" class="cv-sinapse" role="img" aria-label="Animação de uma sinapse: neurotransmissores saem de um neurônio e se ligam aos receptores do neurônio seguinte"></canvas>
+      <div class="legenda-sin" id="legSinapse"></div>
+      <canvas id="cvAtiv" class="cv-ativ" role="img" aria-label="Traçado dos impulsos do neurônio ao longo do tempo"></canvas>
+      <div class="medidores"><div><small>Atividade cerebral</small><b id="vAtivCer">normal</b></div><div><small>Impulsos do neurônio</small><b id="vImpulsos">—</b></div><div><small>Tempo de resposta</small><b id="vReacDroga">—</b></div><div><small>Frequência cardíaca</small><b id="vBpmDroga">—</b></div><div><small>Percepção</small><b id="vPercep">—</b></div></div>
+      <div class="destaque" id="txtDroga"></div>
+      <label class="chk"><input type="checkbox" id="chkCronico"> Uso repetido (o cérebro se adapta)</label>
+      <div class="destaque curioso" id="txtCronico" hidden></div>
+      <div class="linha-btn"><button class="btn prim" id="btnDroga3d">Ver o cérebro no modelo 3D</button></div>
+      <details><summary>Dependência química e onde buscar ajuda</summary>
+        <p>A dependência química é um <b>transtorno de saúde</b>, reconhecido pela Organização Mundial da Saúde, e não falta de vontade. As drogas alteram o <b>sistema de recompensa</b> do cérebro: a pessoa passa a dar preferência a elas, mesmo quando isso prejudica todo o resto da vida.</p>
+        <p><b>Sinais:</b> tolerância (doses cada vez maiores para o mesmo efeito, com risco de overdose), síndrome de abstinência (suor, dor de cabeça, insônia sem a droga), fissura (vontade intensa de usar), gasto de tempo e dinheiro e afastamento de amigos e da família.</p>
+        <p>Fatores <b>biológicos</b>, <b>psicológicos</b> e <b>sociais</b> influenciam. O cérebro do adolescente ainda está amadurecendo, principalmente as áreas que controlam impulsos e avaliam riscos, o que aumenta a vulnerabilidade.</p>
+        <p><b>Tem tratamento, gratuito pelo SUS, em qualquer idade:</b> procure uma UBS ou UPA. Depois da avaliação, o encaminhamento é para o CAPS (Centro de Atenção Psicossocial), que monta um plano de tratamento para cada pessoa.</p>
+        <p class="muted">Prefira dizer “pessoa com dependência química”: a palavra “viciado” carrega preconceito e afasta quem precisa de ajuda.</p>
+      </details>
+    </div>
+
     <div class="cartao sim">
       <h3>💪 Movimento: ossos + músculos + nervos <span class="cod">EF06CI09</span></h3>
       <label>Flexão do cotovelo direito: <b id="vFlex">0°</b><input type="range" id="rFlex" min="0" max="140" value="0"></label>
@@ -639,6 +661,30 @@
     $("#btnDigest").onclick = () => iniciarDigestao();
     $("#selSubst").onchange = e => $("#txtSubst").textContent = SUBST[e.target.value].txt;
     $("#btnReflexo").onclick = () => iniciarReflexo();
+    /* drogas psicoativas */
+    const LEG = {
+      nenhuma: "", depressora: `<span><i style="background:#4a78ff"></i>droga reforçando o receptor de GABA (inibidor)</span>`,
+      estimulante: `<span><i class="losango" style="background:#ff6a2a"></i>droga bloqueando a recaptação</span>`,
+      perturbadora: `<span><i class="losango" style="background:#b060f0"></i>droga parecida com o neurotransmissor</span>`
+    };
+    const atuDroga = (doUsuario) => {
+      const k = sinapse.modo, m = DROGAS.MODOS[k], cron = $("#chkCronico").checked;
+      s.querySelectorAll("[data-droga]").forEach(b => b.classList.toggle("ativo", b.dataset.droga === k));
+      $("#exDroga").innerHTML = m.exemplos ? `<b>${m.acao}.</b> Exemplos: ${m.exemplos}.` : `<b>${m.acao}.</b>`;
+      $("#legSinapse").innerHTML = `<span><i class="bola" style="background:#d9589a"></i>neurotransmissor</span><span><i style="background:#58b4e8"></i>receptor</span><span><i style="background:#3fae8c"></i>recaptação</span>` + LEG[k];
+      $("#txtDroga").innerHTML = m.txt;
+      $("#vAtivCer").textContent = k === "nenhuma" ? (cron ? "abaixo do normal" : "normal") : m.atividade + (cron ? " (efeito menor)" : "");
+      $("#vReacDroga").textContent = m.reacao; $("#vBpmDroga").textContent = m.bpm + " bpm"; $("#vPercep").textContent = m.percepcao;
+      const tc = $("#txtCronico"); tc.hidden = !cron;
+      tc.innerHTML = k === "nenhuma"
+        ? "Depois de se adaptar à droga, o cérebro <b>não funciona como antes sem ela</b>: a atividade fica alterada. É a base da <b>síndrome de abstinência</b> e da <b>fissura</b>, a vontade intensa de usar de novo."
+        : "Com o uso repetido, o neurônio se adapta e fica com <b>menos receptores</b>. A mesma quantidade passa a fazer menos efeito: é a <b>tolerância</b>, que leva a doses cada vez maiores e aumenta o risco de overdose.";
+      if (doUsuario) { est.droga3d = true; est.bpm = m.bpm; atuBpm(); }
+    };
+    s.querySelectorAll("[data-droga]").forEach(b => b.onclick = () => { sinapse.definir(b.dataset.droga, $("#chkCronico").checked); atuDroga(true); });
+    $("#chkCronico").onchange = e => { sinapse.definir(sinapse.modo, e.target.checked); atuDroga(true); };
+    $("#btnDroga3d").onclick = () => { est.droga3d = true; aplicarPreset("drogas"); desselecionar(); voarPara(new T.Vector3(0, 16.25, -0.1), new T.Vector3(5.2, 17.2, 5.6)); };
+    atuDroga(false);
     $("#rFlex").oninput = e => { est.flexao = +e.target.value; aplicarFlexao(); };
     $("#rAgua").oninput = e => { est.hidrat = +e.target.value; atuRim(); };
     $("#btnUrinar").onclick = () => { est.bexiga = 0.05; };
@@ -724,6 +770,67 @@
       }
     }
   }
+  /* ---- drogas psicoativas: sinapse (2D) e atividade do cérebro (3D) ---- */
+  const sinapse = DROGAS.criar();
+  const ENCEFALO = ["cerebro", "cerebelo", "tronco_encefalico"];
+  const N_FAISCAS = 140, faiscas = { malha: null, pts: [], vida: new Float32Array(N_FAISCAS), tam: new Float32Array(N_FAISCAS), brilho: 0 };
+  (function criarFaiscas() {
+    // pontos espalhados pela superfície do cérebro, onde "acendem" os impulsos
+    const fontes = pecas.filter(m => m.userData.id === "cerebro"); if (!fontes.length) return;
+    corpo.raiz.updateWorldMatrix(true, true);
+    const centro = new T.Box3(); fontes.forEach(m => centro.expandByObject(m)); const c = centro.getCenter(new T.Vector3());
+    for (let i = 0; i < N_FAISCAS; i++) {
+      const m = fontes[i % fontes.length], p = m.geometry.attributes.position;
+      const v = new T.Vector3().fromBufferAttribute(p, Math.floor(Math.random() * p.count)).applyMatrix4(m.matrixWorld);
+      v.add(v.clone().sub(c).normalize().multiplyScalar(0.035)); faiscas.pts.push(grupos.nervoso.worldToLocal(v));
+    }
+    const im = new T.InstancedMesh(new T.SphereGeometry(0.055, 10, 8), new T.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), N_FAISCAS);
+    im.instanceMatrix.setUsage(T.DynamicDrawUsage); im.visible = false; im.frustumCulled = false; im.raycast = () => { };
+    const cor = new T.Color(1, 1, 1); for (let i = 0; i < N_FAISCAS; i++) im.setColorAt(i, cor);
+    grupos.nervoso.add(im); faiscas.malha = im;
+  })();
+  sinapse.aoDisparar = () => {
+    if (!est.droga3d || !faiscas.malha) return;
+    const k = sinapse.modo, base = new T.Color(DROGAS.MODOS[k].cor), cor = new T.Color();
+    faiscas.brilho = 1;
+    for (let n = k === "depressora" ? 7 : 16; n > 0; n--) {
+      const i = Math.floor(Math.random() * N_FAISCAS);
+      faiscas.vida[i] = 1; faiscas.tam[i] = 0.7 + Math.random() * 0.9;
+      // perturbadoras: cada disparo com uma cor, para lembrar a atividade desorganizada
+      faiscas.malha.setColorAt(i, k === "perturbadora" ? cor.setHSL(Math.random(), 1, 0.6) : cor.copy(base).lerp(new T.Color(0xffffff), 0.35));
+    }
+    faiscas.malha.instanceColor.needsUpdate = true;
+  };
+  const mtxF = new T.Matrix4(), escF = new T.Vector3(), quatF = new T.Quaternion();
+  let droga3dAtiva = false;
+  function passoDrogas(dt, tempo) {
+    const aba = $("#aba-simular"), cv = $("#cvSinapse");
+    const naTela = aba && !aba.hidden && cv;
+    if (naTela) {
+      sinapse.passo(dt);
+      const r = cv.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < innerHeight && r.width > 0) {
+        DROGAS.desenharSinapse(cv, sinapse); DROGAS.desenharAtividade($("#cvAtiv"), sinapse);
+        $("#vImpulsos").textContent = sinapse.taxa().toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " por s";
+      }
+    }
+    const ativa = !!(naTela && est.droga3d && faiscas.malha);
+    if (!ativa) {
+      if (droga3dAtiva) { droga3dAtiva = false; faiscas.malha.visible = false; ENCEFALO.forEach(id => { if (id !== est.selecionado) limparRealce(id); }); }
+      return;
+    }
+    droga3dAtiva = true; faiscas.malha.visible = true;
+    faiscas.brilho = Math.max(0, faiscas.brilho - dt * 3.5);
+    const k = sinapse.modo, corBase = k === "perturbadora" ? new T.Color().setHSL((tempo * 0.35) % 1, 1, 0.5).getHex() : DROGAS.MODOS[k].cor;
+    ENCEFALO.forEach(id => { if (id !== est.selecionado) realcar(id, corBase, 0.1 + 0.55 * faiscas.brilho); });
+    for (let i = 0; i < N_FAISCAS; i++) {
+      const v = faiscas.vida[i] = Math.max(0, faiscas.vida[i] - dt * (k === "depressora" ? 1.6 : 3));
+      escF.setScalar(v > 0 ? Math.sin(v * Math.PI) * faiscas.tam[i] : 0.0001);
+      faiscas.malha.setMatrixAt(i, mtxF.compose(faiscas.pts[i], quatF, escF));
+    }
+    faiscas.malha.instanceMatrix.needsUpdate = true;
+  }
+
   /* ---- movimento ---- */
   function aplicarFlexao() {
     const a = est.flexao * Math.PI / 180;
@@ -812,7 +919,7 @@
     if (a.aba === "identificar") { trocarAba("desafio"); }
     if (a.sim) {
       trocarAba("simular");
-      const alvo = { coracao: "#simCoracao", digestao: "#btnDigest", reflexo: "#btnReflexo", movimento: "#rFlex", respiracao: "#rFr", puberdade: "#rIdade" }[a.sim];
+      const alvo = { coracao: "#simCoracao", digestao: "#btnDigest", reflexo: "#btnReflexo", drogas: "#cvSinapse", movimento: "#rFlex", respiracao: "#rFr", puberdade: "#rIdade" }[a.sim];
       const n = alvo && $(alvo);
       if (n) { const card = n.closest(".cartao"); card.scrollIntoView({ behavior: "smooth", block: "start" }); card.classList.add("piscar"); setTimeout(() => card.classList.remove("piscar"), 1600); }
       if (a.sim === "puberdade") { est.puberdadeAtiva = true; atualizarPuberdade(); }
@@ -957,6 +1064,7 @@
   $("#btnReset").addEventListener("click", () => {
     aplicarPreset("tudo"); definirSexo("feminino"); est.flexao = 0; aplicarFlexao(); corpo.raiz.scale.setScalar(1); est.puberdadeAtiva = false;
     ["hipotalamo", "hipofise", "ovarios", "testiculos"].forEach(limparRealce);
+    if ($("#chkCronico")) { $("#chkCronico").checked = false; $("[data-droga=nenhuma]").click(); } est.droga3d = false;
     $("#corteTipo").value = "nenhum"; aplicarCorte(); verCorpoInteiro("frente"); desselecionar();
   });
 
@@ -986,7 +1094,7 @@
     refs.pulmoes.forEach(p => { const b = p.userData.escalaBase; p.scale.set(b.x * (1 + amp * r), b.y * (1 + amp * 0.6 * r), b.z * (1 + amp * r)); });
     refs.diafragma.position.y = refs.diafragma.userData.posBase.y - 0.12 * r; refs.diafragma.scale.y = 1 - 0.06 * r;
     const vf = document.getElementById("vFase"); if (vf) vf.textContent = r > 0 ? (Math.cos(faseResp * Math.PI * 2) > 0 ? "inspiração" : "expiração") : (Math.cos(faseResp * Math.PI * 2) < 0 ? "expiração" : "inspiração");
-    passoDigestao(dt); passoReflexo(dt); passoRim(dt); passoPuberdade(tempo);
+    passoDigestao(dt); passoReflexo(dt); passoRim(dt); passoPuberdade(tempo); passoDrogas(dt, tempo);
     if (fogo.visible) fogo.scale.set(1, 1 + 0.2 * Math.sin(tempo * 20), 1);
     halo.scale.setScalar(1 + 0.3 * Math.sin(tempo * 15));
     controles.update();
