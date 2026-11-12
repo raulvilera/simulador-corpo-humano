@@ -450,7 +450,10 @@
   const ROT = ["cerebro", "cerebelo", "olho", "coracao", "pulmao_d", "pulmao_e", "figado", "estomago", "intestino_delgado", "intestino_grosso", "rim_d", "rim_e", "bexiga", "cranio", "coluna", "costelas", "femur", "umero", "traqueia", "esofago", "tireoide", "baco", "pancreas", "diafragma", "biceps", "quadriceps", "deltoide", "aorta", "medula", "utero", "testiculos", "ovarios", "timo", "glandulas_salivares", "uretra"];
   // nomes dos nervos: só aparecem quando poucos sistemas estão visíveis, para não poluir o corpo completo
   const ROT_NERVOS = new Set(["nervo_trigemeo", "plexo_cervical", "nervos_espinais", "ganglios_espinais", "ganglios_simpaticos", "tronco_simpatico", "ganglios_pre_vertebrais", "nervos_esplancnicos", "nervos_ombro_braco", "nervo_obturatorio", "nervo_sural", "nervo_facial", "nervo_vago", "nervo_frenico", "nervos_intercostais", "nervo_radial", "nervo_mediano", "nervo_ulnar", "nervo_femoral", "nervo_isquiatico", "nervo_tibial", "nervo_fibular"]);
-  ROT.push(...ROT_NERVOS);
+  // nomes dos ossos individuais: só com o esqueleto em destaque (até 2 sistemas visíveis e sem os nervos)
+  const ROT_OSSOS = new Set(["osso_frontal", "osso_parietal", "osso_occipital", "osso_temporal", "osso_zigomatico", "maxila", "mandibula", "vertebras_cervicais", "vertebras_toracicas", "vertebras_lombares", "sacro", "clavicula", "escapula", "esterno", "osso_radio", "ulna", "carpo", "metacarpo", "falanges_mao", "pelve", "patela", "osso_tibia", "fibula", "calcaneo", "tarso", "metatarso", "falanges_pe"]);
+  const ROT_GERAIS = new Set(["cranio", "coluna"]);   // dão lugar aos nomes dos ossos individuais
+  ROT.push(...ROT_NERVOS, ...ROT_OSSOS);
   // Setas: nomes nas margens da área 3D, com seta até a superfície da estrutura.
   var setasCorpo = SETAS.criar(camadaRot);   // var: pode ser consultada antes desta linha
   ROT.forEach(id => setasCorpo.adicionar(id, D.estruturas[id].nome, () => selecionar(id, true)));
@@ -460,8 +463,10 @@
     if (!est.rotulos) return;
     const w = palco.clientWidth, h = palco.clientHeight, pts = [];
     const poucos = Object.keys(D.sistemas).filter(s => s !== "tegumentar" && est.visivel[s] && est.opac[s] >= 0.15).length <= 3;
+    const ossos = est.visivel.esqueletico && est.opac.esqueletico >= 0.15 && !est.visivel.nervoso && Object.keys(D.sistemas).filter(s => s !== "tegumentar" && est.visivel[s] && est.opac[s] >= 0.15).length <= 2;
     ROT.forEach(id => {
       if (ROT_NERVOS.has(id) && !poucos) return;
+      if (ROT_OSSOS.has(id) ? !ossos : ossos && ROT_GERAIS.has(id)) return;
       if (!sistemasDe(id).some(s => est.visivel[s] && est.opac[s] >= 0.15)) return;
       const a = SETAS.ancora(amostrasDe(id), camera, T, null, visivelDeFato); if (!a) return;
       const v = a.project(camera);

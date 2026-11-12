@@ -91,6 +91,80 @@ window.construirCorpo = async function (aoProgresso) {
 
   window.decodificarPacote = async p => { const d = await descomprimir(p.dados); return p.cab.map(c => ({ c, geo: geometria(c, d) })); };
 
+  /* ---------------------- OSSOS INDIVIDUAIS (esqueleto) --------------------- */
+  // O pacote traz vários ossos numa mesma malha (ex.: o crânio inteiro). Aqui cada peça solta
+  // da malha é separada e recebe o nome do seu osso, conforme a posição e o tamanho.
+  function pecasSoltas(geo) {
+    const pos = geo.attributes.position.array, idx = geo.index.array, nv = pos.length / 3;
+    const pai = new Int32Array(nv), visto = new Map();
+    for (let v = 0; v < nv; v++) { const k = pos[v * 3] + "," + pos[v * 3 + 1] + "," + pos[v * 3 + 2]; const o = visto.get(k); if (o === undefined) { visto.set(k, v); pai[v] = v; } else pai[v] = o; }
+    const raiz = v => { while (pai[v] !== v) { pai[v] = pai[pai[v]]; v = pai[v]; } return v; };
+    for (let i = 0; i < idx.length; i += 3) { const a = raiz(idx[i]); let b = raiz(idx[i + 1]); if (b !== a) pai[b] = a; b = raiz(idx[i + 2]); if (b !== a) pai[b] = a; }
+    const mapa = new Map(), lista = [];
+    for (let v = 0; v < nv; v++) {
+      const r = raiz(v); let o = mapa.get(r);
+      if (!o) { o = { n: 0, mn: [1e9, 1e9, 1e9], mx: [-1e9, -1e9, -1e9] }; mapa.set(r, o); lista.push(o); }
+      o.n++; for (let k = 0; k < 3; k++) { const x = pos[v * 3 + k]; if (x < o.mn[k]) o.mn[k] = x; if (x > o.mx[k]) o.mx[k] = x; }
+    }
+    lista.forEach(o => { o.c = o.mn.map((a, k) => (a + o.mx[k]) / 2); o.t = o.mn.map((a, k) => o.mx[k] - a); });
+    return { lista, de: v => mapa.get(raiz(v)) };
+  }
+  function dividir(geo, nomear) {
+    const { lista, de } = pecasSoltas(geo); nomear(lista);
+    const idx = geo.index.array, pos = geo.attributes.position.array, nor = geo.attributes.normal.array, porId = {};
+    for (let i = 0; i < idx.length; i += 3) {
+      const id = de(idx[i]).id, g = porId[id] || (porId[id] = { mapa: new Map(), p: [], n: [], i: [] });
+      for (let k = 0; k < 3; k++) {
+        const v = idx[i + k]; let j = g.mapa.get(v);
+        if (j === undefined) { j = g.mapa.size; g.mapa.set(v, j); g.p.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]); g.n.push(nor[v * 3], nor[v * 3 + 1], nor[v * 3 + 2]); }
+        g.i.push(j);
+      }
+    }
+    return Object.entries(porId).map(([id, g]) => {
+      const b = new T.BufferGeometry();
+      b.setAttribute("position", new T.Float32BufferAttribute(g.p, 3)); b.setAttribute("normal", new T.Float32BufferAttribute(g.n, 3));
+      b.setIndex(g.i); b.computeBoundingSphere(); return [id, b];
+    });
+  }
+  const deCima = (l, f) => l.slice().sort((a, b) => b.mx[1] - a.mx[1]).forEach(f);          // do mais alto para o mais baixo
+  const porLado = (l, f) => [1, -1].forEach(s => deCima(l.filter(o => o.c[0] * s > 0), f));  // idem, em cada lado do corpo
+  const todos = id => l => l.forEach(o => o.id = id);
+  const OSSOS = {
+    "cranio:osso": l => l.forEach(o => {
+      const ax = Math.abs(o.c[0]);
+      o.id = o.mx[1] > 16.8 && o.mn[2] < -0.5 ? "osso_parietal"
+        : o.mx[1] > 16.9 ? "osso_frontal"
+        : o.mn[2] < -1.0 ? "osso_occipital"
+        : o.mn[2] < -0.3 ? "osso_temporal"
+        : o.t[0] > 0.9 ? "osso_esfenoide"
+        : ax > 0.3 && o.mn[2] > 0.15 ? "osso_zigomatico"
+        : o.mn[2] > 0.65 ? "osso_nasal"
+        : o.mn[1] < 15.45 ? "maxila"
+        : o.mn[1] < 15.5 ? "osso_palatino"
+        : o.mn[1] < 15.6 ? "vomer"
+        : o.n > 1000 ? "osso_etmoide"
+        : o.n > 150 && ax > 0.05 && o.t[1] > 0.2 ? "osso_lacrimal"
+        : "osso_etmoide";   // lâminas finas da cavidade nasal
+    }),
+    "coluna:osso": l => deCima(l, (o, i) => o.id = i < 7 ? "vertebras_cervicais" : i < 19 ? "vertebras_toracicas" : i < 24 ? "vertebras_lombares" : "sacro"),
+    "coluna:disco": todos("discos_intervertebrais"),
+    "costelas:osso": l => porLado(l, (o, i) => o.id = i < 7 ? "costelas_verdadeiras" : i < 10 ? "costelas_falsas" : "costelas_flutuantes"),
+    "costelas:cartilagem": todos("cartilagens_costais"),
+    "esterno:osso": l => deCima(l, (o, i) => o.id = ["manubrio", "corpo_esterno", "processo_xifoide"][Math.min(i, 2)]),
+    "radio:osso": l => l.forEach(o => o.id = Math.abs(o.c[0]) > 2.4 ? "osso_radio" : "ulna"),   // o rádio fica do lado do polegar (lateral)
+    "mao:osso": l => l.forEach(o => o.id = o.mn[1] >= 8.55 ? "carpo" : o.mx[1] > 8.6 ? "metacarpo" : "falanges_mao"),
+    "pe:osso": l => l.forEach(o => {
+      o.id = o.mn[2] < -0.6 ? "calcaneo" : o.mx[1] > 0.75 ? "talus"
+        : o.t[2] > 0.55 && o.mn[2] > -0.2 ? "metatarso"
+        : o.n < 110 && o.mn[2] > 0.7 && o.mx[2] < 0.86 ? "metatarso"   // ossos sesamoides, sob a cabeça do 1º metatarsal
+        : o.mn[2] >= 0.45 ? "falanges_pe" : "tarso";
+    }),
+    // junto da tíbia, da fíbula e da escápula o pacote traz músculos de nome parecido: vão para o sistema muscular
+    "tibia:osso": l => l.forEach(o => o.id = o.n < 100 || o.n > 700 || o.t[1] < 2.8 ? "fibulares" : o.mn[1] > 0.6 ? "osso_tibia" : "fibula"),
+    "escapula:osso": l => l.forEach(o => o.id = o.mx[1] > 15 ? "levantador_escapula" : o.mn[1] < 12.7 ? "escapula" : "subescapular")
+  };
+  const MUSCULOS_NO_OSSO = new Set(["fibulares", "levantador_escapula", "subescapular"]);
+
   /* ------------------------ ORGANIZAÇÃO NA CENA ---------------------------- */
   const subgrupos = { fem: [], masc: [] };
   function sub(sist, grupo) {
@@ -122,13 +196,17 @@ window.construirCorpo = async function (aoProgresso) {
     progresso(i / ordem.length, DADOS.sistemas[sist] ? DADOS.sistemas[sist].nome : sist);
     const dados = await descomprimir(pacote.dados);
     for (const c of pacote.cab) {
-      const mesh = new T.Mesh(geometria(c, dados), material(c.id, c.mat));
-      registrar(mesh, c.id, sist);
-      const pai = sub(sist, c.grupo);
-      if (c.piv) { mesh.position.copy(COT).negate(); pivo(pai, sist).add(mesh); }
+      const geo = geometria(c, dados), nomear = sist === "esqueletico" && OSSOS[c.id + ":" + c.mat];
+      for (const [id, g] of nomear ? dividir(geo, nomear) : [[c.id, geo]]) {
+      const musc = MUSCULOS_NO_OSSO.has(id), sis = musc ? "muscular" : sist;
+      const mesh = new T.Mesh(g, material(id, musc ? "musculo" : c.mat));
+      registrar(mesh, id, sis); mesh.userData.base = c.id;
+      const pai = sub(sis, c.grupo);
+      if (c.piv) { mesh.position.copy(COT).negate(); pivo(pai, sis).add(mesh); }
       else if (CENTRAR[c.id] || (c.lado === "D" && (c.id === "biceps" || c.id === "triceps"))) centrado(c.id + (c.lado || ""), pai).malhas.push(mesh);
       else pai.add(mesh);
       if (c.id === "pele" && c.grupo === "masc" && !c.piv) peleMasc = mesh;
+      }
     }
     pacote.dados = null; // libera memória
     await new Promise(r => setTimeout(r, 0));
@@ -243,8 +321,8 @@ window.construirCorpo = async function (aoProgresso) {
   // Músculos da face (mímica e mastigação), moldados sobre o crânio, olhos e nariz reais
   (function () {
     const BASE = ["cranio", "mandibula", "palpebras", "esclera", "cartilagens_nasais"];
-    const fontes = pecas.filter(m => BASE.includes(m.userData.id) && m.parent && !m.parent.userData.pivo);
-    if (!fontes.some(m => m.userData.id === "cranio")) return;
+    const fontes = pecas.filter(m => BASE.includes(m.userData.base || m.userData.id) && m.parent && !m.parent.userData.pivo);
+    if (!fontes.some(m => m.userData.base === "cranio")) return;
     // Mapa de altura: para cada (a,b) guarda a maior "altura" da superfície (rasterização dos triângulos)
     function mapa(a0, a1, b0, b1, R, proj) {
       const NA = Math.round((a1 - a0) / R) + 1, NB = Math.round((b1 - b0) / R) + 1;
