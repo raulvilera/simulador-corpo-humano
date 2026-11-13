@@ -236,6 +236,8 @@
 
   // uma malha "pertence" a um id se for a própria estrutura ou parte do órgão (ex.: córnea → olho)
   const pertence = (m, id) => m.userData.id === id || (D.estruturas[m.userData.id] && D.estruturas[m.userData.id].orgao === id);
+  // vistas por trás para o que fica atrás de outro órgão: suprarrenais (atrás do pâncreas) e paratireoides (atrás da tireoide)
+  const VISTA_FOCO = { adrenais: [0.35, 0.3, -1], paratireoides: [0.5, 0.15, -1] };
   function focar(id) {
     const caixa = new T.Box3();
     let ok = false;
@@ -246,6 +248,7 @@
     const dist = Math.min(Math.max(tam * 2.2, 1.2), 40);
     const dir = camera.position.clone().sub(controles.target).normalize();
     if (Math.abs(dir.y) > 0.8) dir.set(0, 0.2, 1).normalize();
+    if (VISTA_FOCO[id]) dir.set(...VISTA_FOCO[id]).normalize();   // estruturas escondidas atrás de outras
     est.vistaInteira = null;
     voarPara(c, c.clone().add(dir.multiplyScalar(dist)));
   }
@@ -361,6 +364,7 @@
           <figcaption>Imagem real: ${escaparHTML(img.autor)} · <a href="${img.fonte}" target="_blank" rel="noopener">${escaparHTML(img.licenca || "Wikimedia Commons")}</a></figcaption>
         </figure>` : ""}
         <h4>Função</h4><p>${e.funcao}</p>
+        ${e.hormonios ? `<h4>Hormônios que produz</h4>${tabelaHormonios(e.hormonios)}` : ""}
         <h4>Como é</h4><p>${e.desc}</p>
         ${e.curiosidade ? `<div class="destaque curioso"><b>Você sabia?</b> ${e.curiosidade}</div>` : ""}
         ${e.saude ? `<div class="destaque saude"><b>Saúde e prevenção:</b> ${e.saude}</div>` : ""}
@@ -406,13 +410,36 @@
     const e = D.estruturas[id]; if (!e || !window.LUPA) return null;
     if (e.lupa) return e.lupa; if (e.orgao && D.estruturas[e.orgao]) return D.estruturas[e.orgao].lupa || null; return null;
   }
+  const tabelaHormonios = lista => `<table class="tab-horm"><thead><tr><th>Hormônio</th><th>O que faz</th></tr></thead><tbody>${lista.map(([h, f]) => `<tr><td>${h}</td><td>${f}</td></tr>`).join("")}</tbody></table>`;
+  // Painel do sistema endócrino: todas as glândulas com seus hormônios e funções
+  const GLANDULAS = ["hipotalamo", "hipofise", "pineal", "tireoide", "paratireoides", "timo", "adrenais", "pancreas", "ovarios", "testiculos"];
+  function painelEndocrino() {
+    const linhas = GLANDULAS.filter(k => D.estruturas[k]).map(k => {
+      const e = D.estruturas[k];
+      return `<button class="gland" data-gland="${k}"><b>${e.nome}</b><span>${(e.hormonios || []).map(h => h[0].replace(/ \(.*\)$/, "")).join(" · ")}</span><small>${e.funcao}</small></button>`;
+    }).join("");
+    const outros = (D.endocrinoOutros || []).map(o => o.id ? `<li><a href="#" data-outro="${o.id}">${o.nome}</a>: ${o.hormonios}.</li>` : `<li><b>${o.nome}</b>: ${o.hormonios}.</li>`).join("");
+    return `<h4>Glândulas, hormônios e funções (toque para localizar)</h4><div class="glands">${linhas}</div>
+      <p class="mini-txt muted">Ovários aparecem no corpo feminino e testículos no masculino (troque em “Visualização”).</p>
+      <h4>Outros órgãos que também produzem hormônios</h4><ul class="lista mini-txt">${outros}</ul>
+      <div class="destaque"><b>Como funciona:</b> as glândulas lançam os hormônios no <b>sangue</b>, que os leva a todo o corpo; só as células com receptores para aquele hormônio (células-alvo) respondem. Muitos são controlados por <b>retroalimentação negativa</b>: quando o nível do hormônio sobe, o hipotálamo e a hipófise reduzem o estímulo à glândula.</div>`;
+  }
   function mostrarSistema(id) {
     const s = D.sistemas[id];
     const estr = Object.entries(D.estruturas).filter(([, e]) => e.sistema === id || (e.tambem && e.tambem.includes(id)));
     trocarAba("explorar");
     painelInfo.innerHTML = `<div class="cartao"><div class="etiqueta" style="--c:${s.cor}">Sistema</div><h2>${s.nome}</h2><p>${s.descricao}</p>
       <h4>Estruturas (clique para localizar)</h4><div class="chips">${estr.filter(([, e]) => !e.soLupa).map(([k, e]) => `<button class="chip" data-estr="${k}">${e.nome}</button>`).join("")}</div>
-      ${estr.some(([, e]) => e.soLupa) ? `<h4>🔬 Vistas ampliadas (Lupa dos sentidos)</h4><div class="chips">${estr.filter(([, e]) => e.soLupa).map(([k, e]) => `<button class="chip" data-lupa-estr="${k}">${e.nome}</button>`).join("")}</div>` : ""}</div>`;
+      ${estr.some(([, e]) => e.soLupa) ? `<h4>🔬 Vistas ampliadas (Lupa dos sentidos)</h4><div class="chips">${estr.filter(([, e]) => e.soLupa).map(([k, e]) => `<button class="chip" data-lupa-estr="${k}">${e.nome}</button>`).join("")}</div>` : ""}
+      ${id === "endocrino" ? painelEndocrino() : ""}</div>`;
+    painelInfo.querySelectorAll("[data-gland]").forEach(b => b.onclick = () => {
+      const k = b.dataset.gland, e = D.estruturas[k];
+      if (k === "ovarios" && est.sexo !== "feminino") definirSexo("feminino");
+      if (k === "testiculos" && est.sexo !== "masculino") definirSexo("masculino");
+      garantirVisivel(e.sistema); if (e.tambem) e.tambem.forEach(x => { if (x === "endocrino") garantirVisivel(x); });
+      selecionar(k, true);
+    });
+    painelInfo.querySelectorAll("[data-outro]").forEach(a => a.onclick = ev => { ev.preventDefault(); const k = a.dataset.outro; garantirVisivel(D.estruturas[k].sistema); selecionar(k, true); });
     painelInfo.querySelectorAll("[data-estr]").forEach(b => b.onclick = () => selecionar(b.dataset.estr, true));
     painelInfo.querySelectorAll("[data-lupa-estr]").forEach(b => b.onclick = () => LUPA.abrir(lupaDe(b.dataset.lupaEstr), b.dataset.lupaEstr));
   }
@@ -454,7 +481,9 @@
   // nomes dos ossos individuais: só com o esqueleto em destaque (até 2 sistemas visíveis e sem os nervos)
   const ROT_OSSOS = new Set(["osso_frontal", "osso_parietal", "osso_occipital", "osso_temporal", "osso_zigomatico", "maxila", "mandibula", "vertebras_cervicais", "vertebras_toracicas", "vertebras_lombares", "sacro", "clavicula", "escapula", "esterno", "osso_radio", "ulna", "carpo", "metacarpo", "falanges_mao", "pelve", "patela", "osso_tibia", "fibula", "calcaneo", "tarso", "metatarso", "falanges_pe"]);
   const ROT_GERAIS = new Set(["cranio", "coluna"]);   // dão lugar aos nomes dos ossos individuais
-  ROT.push(...ROT_NERVOS, ...ROT_OSSOS);
+  // glândulas pequenas (hipotálamo, hipófise, pineal, paratireoides, suprarrenais): nome só com o endócrino em destaque
+  const ROT_ENDO = new Set(["hipotalamo", "hipofise", "pineal", "paratireoides", "adrenais"]);
+  ROT.push(...ROT_NERVOS, ...ROT_OSSOS, ...ROT_ENDO);
   // Setas: nomes nas margens da área 3D, com seta até a superfície da estrutura.
   var setasCorpo = SETAS.criar(camadaRot);   // var: pode ser consultada antes desta linha
   ROT.forEach(id => setasCorpo.adicionar(id, D.estruturas[id].nome, () => selecionar(id, true)));
@@ -467,6 +496,7 @@
     const ossos = est.visivel.esqueletico && est.opac.esqueletico >= 0.15 && !est.visivel.nervoso && Object.keys(D.sistemas).filter(s => s !== "tegumentar" && est.visivel[s] && est.opac[s] >= 0.15).length <= 2;
     ROT.forEach(id => {
       if (ROT_NERVOS.has(id) && !poucos) return;
+      if (ROT_ENDO.has(id) && !(poucos && est.visivel.endocrino && est.opac.endocrino >= 0.15)) return;
       if (ROT_OSSOS.has(id) ? !ossos : ossos && ROT_GERAIS.has(id)) return;
       if (!sistemasDe(id).some(s => est.visivel[s] && est.opac[s] >= 0.15)) return;
       const a = SETAS.ancora(amostrasDe(id), camera, T, null, visivelDeFato); if (!a) return;
@@ -475,6 +505,41 @@
       pts.push({ id, x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h });
     });
     setasCorpo.atualizar(pts, w, h);
+  }
+  // Brilho em cada glândula endócrina: são pequenas demais para achar no corpo inteiro
+  const halosEndo = (function () {
+    const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+    const c = cv.getContext("2d"), gr = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(176,110,255,.95)"); gr.addColorStop(0.4, "rgba(140,70,230,.5)"); gr.addColorStop(1, "rgba(140,70,230,0)");
+    c.fillStyle = gr; c.fillRect(0, 0, 64, 64);
+    const tx = new T.CanvasTexture(cv), lista = [];
+    corpo.raiz.updateWorldMatrix(true, true);
+    ["hipotalamo", "hipofise", "pineal", "tireoide", "paratireoides", "timo", "adrenais", "pancreas", "ovarios", "testiculos"].forEach(id => {
+      const ms = pecas.filter(m => m.userData.id === id); if (!ms.length) return;
+      // glândulas pares (suprarrenais e ovários): um brilho em cada lado
+      const lados = ["adrenais", "ovarios"].includes(id) ? [-1, 1] : [0];
+      lados.forEach(sd => {
+        const cx = new T.Box3(), v = new T.Vector3();
+        ms.forEach(m => { const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i += 3) { v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld); if (!sd || v.x * sd > 0) cx.expandByPoint(v); } });
+        if (cx.isEmpty()) return;
+        const sp = new T.Sprite(new T.SpriteMaterial({ map: tx, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+        const tam = Math.max(0.45, Math.min(1.1, cx.getSize(v).length() * 1.6));
+        sp.scale.setScalar(tam); cx.getCenter(sp.position); sp.renderOrder = 5; sp.raycast = () => { };
+        sp.userData = { id, malhas: ms, fase: Math.random() * 6 }; sp.visible = false;
+        grupos.endocrino.add(sp); lista.push(sp);
+      });
+    });
+    return lista;
+  })();
+  function passoHalosEndo(tempo) {
+    const foco = est.visivel.endocrino && est.opac.endocrino >= 0.15 &&
+      Object.keys(D.sistemas).filter(s => s !== "tegumentar" && est.visivel[s] && est.opac[s] >= 0.15).length <= 3;
+    halosEndo.forEach(sp => {
+      sp.visible = foco && sp.userData.malhas.some(visivelDeFato);
+      if (!sp.visible) return;
+      const longe = Math.min(1, Math.max(0, (camera.position.distanceTo(controles.target) - 3) / 8));   // de perto, o brilho some
+      sp.material.opacity = longe * (0.6 + 0.3 * Math.sin(tempo * 2.4 + sp.userData.fase));
+    });
   }
   camadaRot.hidden = !est.rotulos;
   $("#btnRotulos").classList.toggle("ativo", est.rotulos);
@@ -856,7 +921,7 @@
       ["circulatorio", `O coração bate <b>${Math.round(fis.fc)} vezes por minuto</b> e bombeia <b>${fmtN(dc, 1)} L de sangue por minuto</b>. ` + (mov ? `Os vasos dos músculos se dilatam: cerca de <b>${Math.round(fis.musc)}%</b> do sangue vai para eles, levando O₂ e glicose e retirando CO₂.` : "Em repouso, cerca de 20% do sangue vai para os músculos.")],
       ["respiratorio", `<b>${Math.round(fis.fr)} respirações por minuto</b>, com cerca de <b>${fmtN(fis.vc, 1)} L</b> de ar em cada uma. ` + (mov ? "Respirando mais rápido e mais fundo, entra mais O₂ no sangue e sai o CO₂ produzido pelos músculos." : "Em repouso, cerca de 7 L de ar por minuto bastam.")],
       ["tegumentar", fis.temp > 37.1 ? "Os músculos produzem calor. A pele perde esse calor pelo <b>suor</b> (que evapora) e pelos vasos sanguíneos, que se dilatam e deixam a pele <b>avermelhada</b>." : "A pele ajuda a manter a temperatura do corpo perto de 36,5 °C."],
-      ["endocrino", mov ? "As glândulas <b>adrenais</b> liberam <b>adrenalina</b>, que acelera o coração e aumenta a glicose no sangue, a fonte de energia dos músculos." : "Sem esforço, a adrenalina fica em nível baixo."],
+      ["endocrino", mov ? "As glândulas <b>suprarrenais</b> (sobre os rins; pulsam em laranja no modelo) liberam <b>adrenalina</b>, que acelera o coração e aumenta a glicose no sangue. O <b>glucagon</b> do pâncreas também libera glicose guardada no fígado para os músculos." : "Sem esforço, a adrenalina fica em nível baixo."],
       ["digestorio", mov ? `Recebe menos sangue durante o esforço (cerca de ${Math.round(fis.dig)}%) e a digestão fica mais lenta. Por isso não é bom fazer exercício intenso logo depois de comer.` : "Em repouso, cerca de 25% do sangue passa pelos órgãos da digestão."]
     ];
     const chave = modo + (fis.temp > 37.1);
@@ -965,6 +1030,13 @@
       muscAceso = false;
       matsMusc.forEach(mt => { mt.emissive.setHex(0); mt.userData.ladoAtiv.D.value = 1; mt.userData.ladoAtiv.E.value = 1; });
       if (est.selecionado) realcar(est.selecionado, 0xffaa22, 0.55);
+    }
+    // suprarrenais liberam adrenalina durante o esforço: a glândula pulsa no modelo
+    const adr = mats["adrenais:adrenal"] || mats.adrenais;
+    if (adr && adr.emissive && est.selecionado !== "adrenais") {
+      const esf = MOV.est.pA * 0.5 + MOV.est.pC;
+      if (esf > 0.02) { adr.emissive.setHex(0xff7a1a); adr.emissiveIntensity = esf * (0.55 + 0.35 * Math.sin(performance.now() / 180)); adr.userData.aceso = true; }
+      else if (adr.userData.aceso) { adr.userData.aceso = false; adr.emissive.setHex(0); }
     }
     passoFisiologia(dt);
   }
@@ -1367,7 +1439,7 @@
     refs.pulmoes.forEach(p => { const b = p.userData.escalaBase; p.scale.set(b.x * (1 + amp * r), b.y * (1 + amp * 0.6 * r), b.z * (1 + amp * r)); });
     refs.diafragma.position.y = refs.diafragma.userData.posBase.y - 0.12 * r; refs.diafragma.scale.y = 1 - 0.06 * r;
     const vf = document.getElementById("vFase"); if (vf) vf.textContent = r > 0 ? (Math.cos(faseResp * Math.PI * 2) > 0 ? "inspiração" : "expiração") : (Math.cos(faseResp * Math.PI * 2) < 0 ? "expiração" : "inspiração");
-    passoMovimento(dt);
+    passoMovimento(dt); passoHalosEndo(tempo);
     passoDigestao(dt); passoReflexo(dt); passoRim(dt); passoPuberdade(tempo); passoDrogas(dt, tempo);
     if (fogo.visible) fogo.scale.set(1, 1 + 0.2 * Math.sin(tempo * 20), 1);
     halo.scale.setScalar(1 + 0.3 * Math.sin(tempo * 15));
