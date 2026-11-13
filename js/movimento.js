@@ -30,11 +30,16 @@ window.MOVIMENTO = (function () {
     osso("cabeca", "pescoco", 0, V(0, 15.3, -0.15), V(0, 15.4, 0), V(0, 16.9, 0), 1.0, 0.6, 1, 1);
     [-1, 1].forEach(s => {
       const L = s < 0 ? "D" : "E", m = v => V(v.x * (s < 0 ? 1 : -1), v.y, v.z);
-      const ombro = V(-1.62, 13.85, -0.2), cot = V(COT.x, COT.y, COT.z), punho = V(-2.55, 8.95, 0.15), dedos = V(-2.75, 7.5, 0.5);
+      const ombro = V(-1.62, 13.85, -0.2), cot = V(COT.x, COT.y, COT.z), punho = V(-2.55, 8.95, 0.15), dedos = V(-2.77, 7.3, 0.9);
       const coxa = V(-0.88, 8.85, -0.2), joelho = V(-0.78, 4.58, -0.17), torn = V(-0.98, 0.62, -0.1);
       osso("ombro" + L, "torax", s, m(ombro), m(ombro), m(cot), 0.5, 2.2, 0.6);
       osso("cotovelo" + L, "ombro" + L, s, m(cot), m(cot), m(punho), 0.42, 0.6, 0.6);
-      osso("punho" + L, "cotovelo" + L, s, m(punho), m(punho), m(dedos), 0.4, 0.6, 1);
+      // mão: punho → nós dos dedos (articulação metacarpofalângica) → meio dos dedos (interfalângica)
+      const nos = V(-2.72, 8.02, 0.47), meio = V(-2.74, 7.68, 0.6);
+      osso("punho" + L, "cotovelo" + L, s, m(punho), m(punho), m(nos), 0.45, 0.6, 1.6);
+      osso("dedos" + L, "punho" + L, s, m(nos), m(nos), m(meio), 0.45, 1.6, 1.2);
+      osso("dedos2" + L, "dedos" + L, s, m(meio), m(meio), m(dedos), 0.45, 1.2, 1);
+      osso("polegar" + L, "punho" + L, s, m(V(-2.98, 8.7, 0.55)), m(V(-2.98, 8.7, 0.6)), m(V(-3.1, 8.55, 1.2)), 0.3, 1.5, 1);
       osso("coxa" + L, "quadril", s, m(coxa), m(coxa), m(joelho), 0.7, 2.5, 0.6);
       osso("joelho" + L, "coxa" + L, s, m(joelho), m(joelho), m(torn), 0.55, 0.6, 2.0);
       osso("tornozelo" + L, "joelho" + L, s, m(torn), m(V(-1.0, 0.35, -0.35)), m(V(-1.15, 0.2, 1.15)), 0.45, 1, 1);
@@ -102,7 +107,7 @@ window.MOVIMENTO = (function () {
     const RIGIDO = {
       pelve: "quadril", sacro: "quadril", femur: "coxa", patela: "joelho", osso_tibia: "joelho", fibula: "joelho", tibia: "joelho",
       calcaneo: "tornozelo", talus: "tornozelo", tarso: "tornozelo", metatarso: "tornozelo", falanges_pe: "tornozelo", pe: "tornozelo",
-      umero: "ombro", osso_radio: "cotovelo", ulna: "cotovelo", radio: "cotovelo", carpo: "punho", metacarpo: "punho", falanges_mao: "punho", mao: "punho",
+      umero: "ombro", osso_radio: "cotovelo", ulna: "cotovelo", radio: "cotovelo", carpo: "punho", metacarpo: "punho",
       vertebras_cervicais: "pescoco", vertebras_toracicas: "torax", vertebras_lombares: "lombar",
       costelas_verdadeiras: "torax", costelas_falsas: "torax", costelas_flutuantes: "torax", cartilagens_costais: "torax",
       manubrio: "torax", corpo_esterno: "torax", processo_xifoide: "torax", clavicula: "torax", escapula: "torax",
@@ -110,7 +115,7 @@ window.MOVIMENTO = (function () {
       osso_zigomatico: "cabeca", osso_nasal: "cabeca", maxila: "cabeca", osso_palatino: "cabeca", vomer: "cabeca", osso_etmoide: "cabeca",
       osso_lacrimal: "cabeca", mandibula: "cabeca"
     };
-    const LADOS = new Set(["coxa", "joelho", "tornozelo", "ombro", "cotovelo", "punho"]);
+    const LADOS = new Set(["coxa", "joelho", "tornozelo", "ombro", "cotovelo", "punho", "dedos", "dedos2", "polegar"]);
     const PERNA_D = new Set(["coxaD", "joelhoD", "tornozeloD"].map(n => IDX[n])), PERNA_E = new Set(["coxaE", "joelhoE", "tornozeloE"].map(n => IDX[n]));
     function ossoRigido(m) {
       if (m.userData.sistema !== "esqueletico") return null;
@@ -226,7 +231,7 @@ window.MOVIMENTO = (function () {
       tornozelo: q => -6 * g(q, 0.06, 0.05) + 10 * g(q, 0.42, 0.12) - 18 * g(q, 0.62, 0.06) + 2 * g(q, 0.85, 0.1),
       ombro: q => 3 + 15 * Math.cos(TAU * (q - 0.9)),
       cotovelo: q => 14 + 10 * Math.max(0, Math.cos(TAU * (q - 0.9))),
-      giro: 4, bascula: 3.5, desvio: 0.22, incl: 2, aduc: 0, voo: 0,
+      giro: 4, bascula: 3.5, desvio: 0.22, incl: 2, aduc: 0, voo: 0, maoNos: 22, maoMeio: 28, maoPolegar: 10,   // mão relaxada, levemente curvada
       ativ: {   // ativação aproximada (eletromiografia da marcha)
         gluteo: q => g(q, 0.05, 0.1),
         quadriceps: q => 0.9 * g(q, 0.1, 0.08) + 0.3 * g(q, 0.95, 0.06),
@@ -242,7 +247,7 @@ window.MOVIMENTO = (function () {
       tornozelo: q => -4 * g(q, 0.0, 0.04) + 12 * g(q, 0.15, 0.08) - 26 * g(q, 0.38, 0.06) + 6 * g(q, 0.75, 0.12),
       ombro: q => 8 + 30 * Math.cos(TAU * (q - 0.85)),
       cotovelo: q => 86 + 8 * Math.cos(TAU * (q - 0.85)),
-      giro: 6, bascula: 4, desvio: 0.12, incl: 8, aduc: 7, voo: 0.32,
+      giro: 6, bascula: 4, desvio: 0.12, incl: 8, aduc: 7, voo: 0.32, maoNos: 75, maoMeio: 95, maoPolegar: 60,   // mão fechada
       ativ: {
         gluteo: q => g(q, 0.0, 0.1) + 0.4 * g(q, 0.85, 0.08),
         quadriceps: q => g(q, 0.12, 0.1) + 0.3 * g(q, 0.9, 0.06),
@@ -283,6 +288,9 @@ window.MOVIMENTO = (function () {
         B("ombro" + L).rotation.set(-mist("ombro", qb) * RAD, 0, s * mistN("aduc") * RAD);
         B("cotovelo" + L).rotation.set(-mist("cotovelo", qb) * RAD, 0, 0);
         B("punho" + L).rotation.set(0, 0, 0);
+        B("dedos" + L).rotation.set(-mistN("maoNos") * RAD, 0, 0);
+        B("dedos2" + L).rotation.set(-mistN("maoMeio") * RAD, 0, 0);
+        B("polegar" + L).rotation.set(mistN("maoPolegar") * RAD, 0, 0);   // polegar dobra por cima dos dedos
       });
       // pelve, tronco e cabeça
       const quad = B("quadril"), lomb = B("lombar"), tor = B("torax"), pes = B("pescoco"), cab = B("cabeca");
