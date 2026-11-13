@@ -404,3 +404,61 @@ window.DADOS = {
     ["Guyton & Hall — Tratado de Fisiologia Médica; Tortora — Princípios de Anatomia e Fisiologia", "Valores fisiológicos de referência (FC, volume corrente, filtração glomerular, tempos de digestão).", ""]
   ]
 };
+
+/* ---------------------------------------------------------------------
+   SISTEMA ENDÓCRINO — hormônios de cada glândula: [hormônio, o que faz]
+   (Guyton & Hall; Tortora; Terminologia Anatômica)
+--------------------------------------------------------------------- */
+(function () {
+  const E = window.DADOS.estruturas;
+  const H = {
+    hipotalamo: {
+      funcao: "Liga o sistema nervoso ao endócrino: percebe a temperatura, a fome, a sede e o nível de hormônios no sangue e comanda a hipófise.",
+      desc: "Pequena região na base do encéfalo, logo acima da hipófise, à qual se liga por uma haste (infundíbulo).",
+      hormonios: [["Hormônios liberadores (TRH, CRH, GnRH, GHRH)", "Mandam a hipófise produzir os seus hormônios"], ["Hormônios inibidores (somatostatina, dopamina)", "Freiam a produção de GH e de prolactina pela hipófise"], ["ADH (antidiurético) e ocitocina", "Produzidos aqui e guardados na neuro-hipófise, que os libera no sangue"]]
+    },
+    hipofise: {
+      funcao: "Chamada de “glândula mestra”: seus hormônios controlam a tireoide, as suprarrenais e as gônadas, além do crescimento.",
+      desc: "Do tamanho de um grão de ervilha, fica numa cavidade do osso esfenoide (sela turca), abaixo do hipotálamo. Tem duas partes: adeno-hipófise (anterior) e neuro-hipófise (posterior).",
+      hormonios: [["GH (hormônio do crescimento)", "Crescimento dos ossos e músculos"], ["TSH (tireotrófico)", "Estimula a tireoide"], ["ACTH (adrenocorticotrófico)", "Estimula o córtex das suprarrenais (cortisol)"], ["FSH e LH (gonadotrofinas)", "Estimulam ovários e testículos: gametas e hormônios sexuais"], ["Prolactina", "Produção de leite nas mamas"], ["ADH (liberado aqui)", "Rins reabsorvem água: urina mais concentrada"], ["Ocitocina (liberada aqui)", "Contrações do útero no parto e saída do leite"]]
+    },
+    pineal: {
+      desc: "Pequena glândula em forma de pinha no centro do encéfalo (epitálamo).",
+      hormonios: [["Melatonina", "Produzida no escuro; induz o sono e regula o relógio biológico (ciclo sono–vigília)"]]
+    },
+    tireoide: {
+      funcao: "Regula o metabolismo de todas as células (T3 e T4) e ajuda a controlar o cálcio no sangue (calcitonina).",
+      desc: "Glândula em forma de borboleta à frente da traqueia, logo abaixo da cartilagem tireóidea (“pomo de Adão”). Precisa de iodo para fabricar seus hormônios.",
+      saude: "Pouco hormônio (hipotireoidismo) causa cansaço, frio e ganho de peso; excesso (hipertireoidismo) causa agitação, perda de peso e coração acelerado. A falta de iodo causa o bócio.",
+      hormonios: [["T3 e T4 (tiroxina)", "Aceleram o metabolismo, a produção de calor e o desenvolvimento do sistema nervoso"], ["Calcitonina", "Diminui o cálcio do sangue, guardando-o nos ossos"]]
+    },
+    paratireoides: { hormonios: [["Paratormônio (PTH)", "Aumenta o cálcio do sangue: retira cálcio dos ossos, reduz a perda pelos rins e ativa a vitamina D"]] },
+    timo: {
+      funcao: "Órgão linfático e endócrino: nele os linfócitos T amadurecem, sob a ação dos hormônios do próprio timo.",
+      desc: "Fica no tórax, atrás do esterno e à frente do coração. É grande na infância e, depois da puberdade, é aos poucos substituído por gordura.",
+      curiosidade: "É o único órgão que fica menor à medida que crescemos.",
+      hormonios: [["Timosina e timopoietina", "Amadurecimento dos linfócitos T, células de defesa"]]
+    },
+    adrenais: {
+      funcao: "Preparam o corpo para emergências (adrenalina) e para o estresse prolongado (cortisol) e controlam o sal e a água (aldosterona).",
+      desc: "Também chamadas de glândulas adrenais: uma sobre cada rim. Têm duas partes com funções diferentes: o córtex (externo) e a medula (interna).",
+      curiosidade: "A adrenalina acelera o coração e a respiração em segundos: é a resposta de “luta ou fuga”. Durante a corrida, ela também libera glicose para os músculos.",
+      saude: "O estresse constante mantém o cortisol alto, o que pode prejudicar o sono, a imunidade e a memória.",
+      hormonios: [["Adrenalina e noradrenalina (medula)", "“Luta ou fuga”: aceleram o coração, dilatam os brônquios e liberam glicose"], ["Cortisol (córtex)", "Resposta ao estresse; aumenta a glicose no sangue e reduz inflamações"], ["Aldosterona (córtex)", "Rins retêm sódio e água; regula a pressão arterial"], ["Andrógenos (córtex)", "Pelos pubianos e axilares na puberdade"]]
+    },
+    pancreas: { hormonios: [["Insulina (células beta)", "Faz a glicose entrar nas células: baixa a glicemia depois das refeições"], ["Glucagon (células alfa)", "Libera glicose guardada no fígado: sobe a glicemia em jejum"], ["Somatostatina", "Freia a liberação de insulina e de glucagon"]] },
+    ovarios: { hormonios: [["Estrogênio", "Características sexuais femininas (mamas, quadris) e preparo do útero no ciclo menstrual"], ["Progesterona", "Mantém o útero pronto para a gravidez"], ["Inibina", "Freia o FSH da hipófise"]] },
+    testiculos: { hormonios: [["Testosterona", "Características sexuais masculinas (voz, pelos, músculos) e produção de espermatozoides"], ["Inibina", "Freia o FSH da hipófise"]] }
+  };
+  Object.entries(H).forEach(([k, v]) => { if (E[k]) Object.assign(E[k], v); });
+  // Órgãos de outros sistemas que também produzem hormônios
+  window.DADOS.endocrinoOutros = [
+    { id: "rim_d", nome: "Rins", hormonios: "eritropoietina (produção de hemácias), renina (pressão arterial) e calcitriol (vitamina D ativa)" },
+    { id: "coracao", nome: "Coração", hormonios: "peptídeo natriurético atrial (faz os rins eliminarem sal e água, baixando a pressão)" },
+    { id: "estomago", nome: "Estômago", hormonios: "gastrina (suco gástrico) e grelina (sensação de fome)" },
+    { id: "intestino_delgado", nome: "Intestino delgado", hormonios: "secretina e colecistocinina (liberação de suco pancreático e bile)" },
+    { id: "figado", nome: "Fígado", hormonios: "IGF-1 (age junto com o GH no crescimento)" },
+    { id: null, nome: "Tecido adiposo", hormonios: "leptina (sensação de saciedade)" },
+    { id: null, nome: "Placenta (na gravidez)", hormonios: "hCG (detectado nos testes de gravidez), estrogênio e progesterona" }
+  ];
+})();
