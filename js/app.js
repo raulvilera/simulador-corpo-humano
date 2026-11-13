@@ -687,7 +687,16 @@
     };
     atuBpmExt = atuBpm;
     $("#rBpm").oninput = e => { est.bpm = +e.target.value; atuBpm(); };
-    s.querySelectorAll("[data-ativ]").forEach(b => b.onclick = () => { est.bpm = +b.dataset.ativ; est.fr = est.bpm > 140 ? 32 : est.bpm > 90 ? 20 : 12; $("#rFr").value = est.fr; atuFr(); atuBpm(); });
+    // Repouso / Caminhada / Corrida: o corpo também passa a andar ou correr (a FC sobe aos poucos, como no corpo real)
+    s.querySelectorAll("[data-ativ]").forEach(b => b.onclick = () => {
+      const modo = { 60: "parado", 100: "andar", 160: "correr" }[b.dataset.ativ];
+      if (MOV && modo) {
+        s.querySelectorAll("[data-ativ]").forEach(x => x.classList.toggle("ativo", x === b));
+        definirMovimento(modo);
+        if (modo !== "parado") return;
+      }
+      est.bpm = +b.dataset.ativ; est.fr = est.bpm > 140 ? 32 : est.bpm > 90 ? 20 : 12; $("#rFr").value = est.fr; atuFr(); atuBpm();
+    });
     $("#chkFluxo").onchange = e => est.fluxo = e.target.checked;
     atuBpm();
     const atuFr = () => {
@@ -806,6 +815,8 @@
   async function definirMovimento(modo) {
     if (!MOV) return;
     $$("[data-mov]").forEach(b => b.classList.toggle("ativo", b.dataset.mov === modo));
+    const ativ = { parado: "60", andar: "100", correr: "160" }[modo];
+    $$("[data-ativ]").forEach(b => b.classList.toggle("ativo", b.dataset.ativ === ativ && modo !== "parado"));
     if (modo !== "parado" && !MOV.pronto) {
       const p = $("#movPrep"); p.hidden = false; p.textContent = "Preparando o esqueleto virtual… 0%";
       est.flexao = 0; aplicarFlexao(); if ($("#rFlex")) $("#rFlex").value = 0;   // o cotovelo volta à posição inicial
@@ -815,6 +826,12 @@
     }
     if (modo !== "parado" && est.flexao) { est.flexao = 0; aplicarFlexao(); if ($("#rFlex")) $("#rFlex").value = 0; }
     if (modo !== "parado" && MOV.est.modo === "parado" && est.vistaInteira === "frente") vistaTresQuartos();
+    // no celular o painel cobre o corpo: fecha para ver o movimento (o painel volta tocando em "Simular")
+    if (modo !== "parado" && window.innerWidth < 900 && document.body.classList.contains("painel-aberto")) {
+      document.body.classList.remove("painel-aberto");
+      vistaTresQuartos();
+      avisar("Toque em “Simular” para ver o coração, a respiração e os músculos em ação.");
+    }
     MOV.definirModo(modo);
     MOV.est.pausa = false;
     const bp = $("#btnPausaMov"); if (bp) { bp.disabled = modo === "parado"; bp.textContent = "⏸ Pausar"; bp.classList.remove("ativo"); }
