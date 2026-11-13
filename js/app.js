@@ -289,6 +289,7 @@
   let ultimoMove = 0;
   renderer.domElement.addEventListener("pointermove", ev => {
     const agora = performance.now(); if (agora - ultimoMove < 40) return; ultimoMove = agora;
+    if (MOV && MOV.ativo) { dica.hidden = true; return; }   // em movimento, o realce ao passar o mouse fica desligado
     const o = pick(ev);
     const id = o ? o.userData.id : null;
     if (realceHover !== id) {
@@ -502,6 +503,7 @@
     im.userData.dados.forEach((d, i) => {
       d.t += dt * vel / d.comp; if (d.t > 1) d.t -= 1;
       const p = d.c.getPointAt(d.t);
+      if (MOV && MOV.ativo) MOV.deformar(p);   // o sangue acompanha os membros em movimento
       mtx.makeTranslation(p.x, p.y, p.z); im.setMatrixAt(i, mtx);
     });
     im.instanceMatrix.needsUpdate = true;
@@ -526,6 +528,49 @@
   function montarSimulacoes() {
     const s = $("#aba-simular");
     s.innerHTML = `
+    <div class="cartao sim" id="simMovimento">
+      <h3>🏃 Corpo em movimento: andar e correr <span class="cod">EF06CI09 · EF05CI06 · EF05CI07</span></h3>
+      <p class="muted">Coloque o corpo para andar ou correr na esteira e veja como os sistemas trabalham juntos: músculos, ossos e nervos produzem o movimento; coração, pulmões e pele se ajustam ao esforço.</p>
+      <div class="seg-mov" role="group" aria-label="Atividade">
+        <button class="btn ativo" data-mov="parado">🧍 Parado</button>
+        <button class="btn" data-mov="andar">🚶 Andar</button>
+        <button class="btn" data-mov="correr">🏃 Correr</button>
+      </div>
+      <div class="linha-btn"><button class="btn" id="btnPausaMov" disabled>⏸ Pausar</button></div>
+      <p class="mini-txt muted" id="movPrep" hidden></p>
+      <div class="medidores">
+        <div><small>Frequência cardíaca</small><b id="mFc">72 bpm</b></div>
+        <div><small>Respiração</small><b id="mFr">14 /min</b></div>
+        <div><small>Ar ventilado</small><b id="mVe">7 L/min</b></div>
+        <div><small>Sangue bombeado</small><b id="mDc">5,0 L/min</b></div>
+        <div><small>O₂ consumido</small><b id="mO2">0,21 L/min</b></div>
+        <div><small>Energia gasta</small><b id="mKcal">1,1 kcal/min</b></div>
+        <div><small>Temperatura</small><b id="mTemp">36,6 °C</b></div>
+        <div><small>Suor</small><b id="mSuor">nenhum</b></div>
+      </div>
+      <canvas id="cvMov" class="cv-ativ" role="img" aria-label="Gráfico da frequência cardíaca e da frequência respiratória ao longo do tempo"></canvas>
+      <div class="legenda-sin"><span><i style="background:#e8574e"></i>frequência cardíaca</span><span><i style="background:#58b4e8"></i>respiração</span><span class="muted">últimos 90 s</span></div>
+      <div class="passada" id="movPassada" aria-live="off">
+        <div><small>Pé direito</small><b id="peD">—</b></div>
+        <div><small>Pé esquerdo</small><b id="peE">—</b></div>
+      </div>
+      <div class="destaque" id="movMusc">Escolha <b>Andar</b> ou <b>Correr</b> para começar.</div>
+      <div class="sis-mov" id="movSis"></div>
+      <label class="chk"><input type="checkbox" id="chkMusc" checked> Acender os músculos que estão contraindo</label>
+      <label class="chk"><input type="checkbox" id="chkLento"> Câmera lenta</label>
+      <div class="linha-btn">
+        <button class="btn" id="btnMovLado">Ver de lado</button>
+        <button class="btn" id="btnMovTres">Ver de 3/4</button>
+        <button class="btn link" data-preset="locomocao">Ossos, músculos e nervos</button>
+        <button class="btn link" data-preset="tudo">Corpo completo</button>
+      </div>
+      <details><summary>Entenda</summary>
+        <p>Para se mover, os músculos usam energia (ATP) da <b>respiração celular</b>: glicose + O₂ → CO₂ + água + energia. Quanto maior o esforço, mais O₂ os músculos pedem e mais CO₂ e calor produzem.</p>
+        <p>Por isso o <b>coração</b> bate mais rápido e forte (leva mais sangue com O₂ e nutrientes), a <b>respiração</b> fica mais rápida e profunda (capta O₂ e elimina CO₂) e a <b>pele</b> transpira e fica avermelhada (perde calor). Quando o exercício termina, os valores voltam ao repouso aos poucos: é a <b>recuperação</b>.</p>
+        <p>Na marcha, cada perna alterna a fase de <b>apoio</b> (pé no chão, sustenta o corpo) e a de <b>balanço</b> (pé no ar, avança). Na corrida existe uma <b>fase de voo</b>, em que nenhum pé toca o chão.</p>
+      </details>
+    </div>
+
     <div class="cartao sim" id="simCoracao">
       <h3>❤️ Batimentos cardíacos e circulação <span class="cod">EF05CI07 · EM13CNT202</span></h3>
       <p class="muted">Ajuste a frequência cardíaca (FC) e veja o sangue circulando: vermelho = rico em O₂ (artérias), azul = pobre em O₂ (veias).</p>
@@ -640,6 +685,7 @@
       $("#vBd").textContent = fmt(est.bpm * 60 * 24);
       $("#rBpm").value = est.bpm;
     };
+    atuBpmExt = atuBpm;
     $("#rBpm").oninput = e => { est.bpm = +e.target.value; atuBpm(); };
     s.querySelectorAll("[data-ativ]").forEach(b => b.onclick = () => { est.bpm = +b.dataset.ativ; est.fr = est.bpm > 140 ? 32 : est.bpm > 90 ? 20 : 12; $("#rFr").value = est.fr; atuFr(); atuBpm(); });
     $("#chkFluxo").onchange = e => est.fluxo = e.target.checked;
@@ -651,6 +697,7 @@
       $("#vVc").textContent = fmt(vc * f) + " mL";
       $("#vVm").textContent = fmt(vc * f * est.fr / 1000, 1) + " L/min";
     };
+    atuFrExt = atuFr;
     $("#rFr").oninput = e => { est.fr = +e.target.value; atuFr(); };
     $("#chkFumante").onchange = e => {
       const fum = e.target.checked;
@@ -695,6 +742,214 @@
     s.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => aplicarPreset(b.dataset.preset));
     s.querySelectorAll("[data-modal]").forEach(b => b.onclick = () => SIM2D.abrir(b.dataset.modal));
     atuRim(); atualizarPuberdade(true);
+    /* corpo em movimento */
+    s.querySelectorAll("[data-mov]").forEach(b => b.onclick = () => definirMovimento(b.dataset.mov));
+    $("#btnMovLado").onclick = () => verCorpoInteiro("lado");
+    $("#btnPausaMov").onclick = e => {
+      if (!MOV || MOV.est.modo === "parado") return;
+      MOV.est.pausa = !MOV.est.pausa;
+      e.currentTarget.textContent = MOV.est.pausa ? "▶ Continuar" : "⏸ Pausar"; e.currentTarget.classList.toggle("ativo", MOV.est.pausa);
+    };
+    $("#btnMovTres").onclick = () => vistaTresQuartos();
+    if (!MOV) s.querySelector("#simMovimento").hidden = true;
+    atualizarTextoSistemas(true);
+  }
+
+  /* ---- corpo em movimento (andar e correr) ---- */
+  let atuBpmExt = null, atuFrExt = null;
+  const MOV = window.MOVIMENTO ? MOVIMENTO.criar(corpo, T) : null;
+  const MUSC_MOV = { gluteo: "glúteos", quadriceps: "quadríceps", isquiotibiais: "isquiotibiais (posteriores da coxa)", panturrilha: "panturrilha", tibial: "tibial anterior" };
+  // Os músculos da perna acendem só no lado que está contraindo: o shader compara o lado do vértice (x < 0 = direito).
+  const matsMusc = [];
+  Object.keys(MUSC_MOV).forEach(id => {
+    const m = mats[id + ":musculo"] || mats[id]; if (!m || !m.emissive || matsMusc.includes(m)) return;
+    const u = { D: { value: 1 }, E: { value: 1 } }; m.userData.ladoAtiv = u; m.userData.idMov = id;
+    m.onBeforeCompile = sh => {
+      sh.uniforms.uAtivD = u.D; sh.uniforms.uAtivE = u.E;
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying float vLadoX;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvLadoX = position.x;");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vLadoX;\nuniform float uAtivD;\nuniform float uAtivE;")
+        .replace("vec3 totalEmissiveRadiance = emissive;", "vec3 totalEmissiveRadiance = emissive * ( vLadoX < 0.0 ? uAtivD : uAtivE );");
+    };
+    m.customProgramCacheKey = () => "ladoX";
+    matsMusc.push(m);
+  });
+  // esteira sob os pés (as faixas acompanham o pé de apoio)
+  const esteira = (function () {
+    const cv = document.createElement("canvas"); cv.width = 32; cv.height = 256;
+    const c = cv.getContext("2d");
+    c.fillStyle = "#3a4446"; c.fillRect(0, 0, 32, 256);
+    c.fillStyle = "#6f7f82"; for (let i = 0; i < 256; i += 32) c.fillRect(0, i, 32, 4);
+    const tx = new T.CanvasTexture(cv); tx.wrapS = tx.wrapT = T.RepeatWrapping; tx.repeat.set(1, 4); tx.encoding = T.sRGBEncoding;
+    const geo = new T.PlaneGeometry(3.4, 9, 1, 12), n = geo.attributes.position.count, cor = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) { const y = geo.attributes.position.getY(i) / 4.5; cor.set([1, 1, 1, Math.min(1, (1 - Math.abs(y)) * 3)], i * 4); }
+    geo.setAttribute("color", new T.BufferAttribute(cor, 4));
+    const m = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tx, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set(0, -0.025, 0.25); m.renderOrder = -1;
+    m.userData.semMovimento = true; m.raycast = () => { }; m.visible = false;
+    corpo.raiz.add(m);
+    return m;
+  })();
+  const FIS = {
+    parado: { fc: 72, fr: 14, vc: 0.5, met: 1, temp: 36.6, suor: 0, vs: 70, musc: 20, dig: 25 },
+    andar: { fc: 105, fr: 20, vc: 1.0, met: 3.5, temp: 37.0, suor: 0.3, vs: 95, musc: 55, dig: 12 },
+    correr: { fc: 162, fr: 36, vc: 2.0, met: 10, temp: 38.2, suor: 1, vs: 112, musc: 80, dig: 4 }
+  };
+  // constantes de tempo (s): sobe rápido, volta ao repouso mais devagar (recuperação)
+  const TAU_SOBE = { fc: 6, fr: 6, vc: 6, met: 4, temp: 30, suor: 18, vs: 6, musc: 4, dig: 4 };
+  const TAU_DESCE = { fc: 14, fr: 12, vc: 10, met: 8, temp: 45, suor: 30, vs: 12, musc: 8, dig: 10 };
+  const fis = Object.assign({ controla: false }, FIS.parado);
+  const histMov = []; let tHist = 0, tTxt = 0, muscAceso = false, modoTxt = null;
+  const PESO_KG = 60;
+  const fmtN = (n, d) => n.toLocaleString("pt-BR", { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
+
+  async function definirMovimento(modo) {
+    if (!MOV) return;
+    $$("[data-mov]").forEach(b => b.classList.toggle("ativo", b.dataset.mov === modo));
+    if (modo !== "parado" && !MOV.pronto) {
+      const p = $("#movPrep"); p.hidden = false; p.textContent = "Preparando o esqueleto virtual… 0%";
+      est.flexao = 0; aplicarFlexao(); if ($("#rFlex")) $("#rFlex").value = 0;   // o cotovelo volta à posição inicial
+      await MOV.preparar(f => p.textContent = `Preparando o esqueleto virtual… ${Math.round(f * 100)}%`);
+      p.hidden = true;
+      if (!$("[data-mov].ativo") || $("[data-mov].ativo").dataset.mov !== modo) return;   // trocou no meio
+    }
+    if (modo !== "parado" && est.flexao) { est.flexao = 0; aplicarFlexao(); if ($("#rFlex")) $("#rFlex").value = 0; }
+    if (modo !== "parado" && MOV.est.modo === "parado" && est.vistaInteira === "frente") vistaTresQuartos();
+    MOV.definirModo(modo);
+    MOV.est.pausa = false;
+    const bp = $("#btnPausaMov"); if (bp) { bp.disabled = modo === "parado"; bp.textContent = "⏸ Pausar"; bp.classList.remove("ativo"); }
+    atualizarTextoSistemas(true);
+  }
+  function vistaTresQuartos() {
+    const v = vistaInteira("frente"), d = v[1].z * 0.98;
+    est.vistaInteira = null;
+    voarPara(v[0], new T.Vector3(-d * 0.62, v[1].y, d * 0.78));
+  }
+  function atualizarTextoSistemas(forcar) {
+    const box = $("#movSis"); if (!box) return;
+    const modo = MOV ? MOV.est.modo : "parado", mov = modo !== "parado", corre = modo === "correr";
+    const dc = fis.fc * fis.vs / 1000;
+    const L = [
+      ["nervoso", mov ? "O <b>córtex motor</b> envia os comandos pela <b>medula espinal</b> e pelos nervos (femoral e isquiático) até os músculos. O <b>cerebelo</b> coordena o ritmo e o equilíbrio a cada passo, com informações dos olhos e do labirinto da orelha."
+        : "Mesmo parado, o cérebro e o cerebelo fazem pequenos ajustes nos músculos para manter a postura e o equilíbrio."],
+      ["muscular", mov ? "Os músculos trabalham em <b>pares antagonistas</b>: o quadríceps estica o joelho e os isquiotibiais o dobram; a <b>panturrilha</b> empurra o corpo para a frente e o <b>tibial anterior</b> levanta a ponta do pé." + (corre ? " Na corrida a força é muito maior e os músculos gastam muito mais energia." : "")
+        : "Músculos da postura (costas, abdome, pernas) ficam levemente contraídos para manter o corpo em pé."],
+      ["esqueletico", mov ? "Os ossos funcionam como <b>alavancas</b> e as articulações do quadril, do joelho e do tornozelo como dobradiças. A coluna e a pelve sustentam o tronco." + (corre ? " Na corrida há <b>fase de voo</b>, e cada pisada chega a 2 a 3 vezes o peso do corpo." : "")
+        : "O esqueleto sustenta o corpo; os ossos das pernas suportam o peso."],
+      ["circulatorio", `O coração bate <b>${Math.round(fis.fc)} vezes por minuto</b> e bombeia <b>${fmtN(dc, 1)} L de sangue por minuto</b>. ` + (mov ? `Os vasos dos músculos se dilatam: cerca de <b>${Math.round(fis.musc)}%</b> do sangue vai para eles, levando O₂ e glicose e retirando CO₂.` : "Em repouso, cerca de 20% do sangue vai para os músculos.")],
+      ["respiratorio", `<b>${Math.round(fis.fr)} respirações por minuto</b>, com cerca de <b>${fmtN(fis.vc, 1)} L</b> de ar em cada uma. ` + (mov ? "Respirando mais rápido e mais fundo, entra mais O₂ no sangue e sai o CO₂ produzido pelos músculos." : "Em repouso, cerca de 7 L de ar por minuto bastam.")],
+      ["tegumentar", fis.temp > 37.1 ? "Os músculos produzem calor. A pele perde esse calor pelo <b>suor</b> (que evapora) e pelos vasos sanguíneos, que se dilatam e deixam a pele <b>avermelhada</b>." : "A pele ajuda a manter a temperatura do corpo perto de 36,5 °C."],
+      ["endocrino", mov ? "As glândulas <b>adrenais</b> liberam <b>adrenalina</b>, que acelera o coração e aumenta a glicose no sangue, a fonte de energia dos músculos." : "Sem esforço, a adrenalina fica em nível baixo."],
+      ["digestorio", mov ? `Recebe menos sangue durante o esforço (cerca de ${Math.round(fis.dig)}%) e a digestão fica mais lenta. Por isso não é bom fazer exercício intenso logo depois de comer.` : "Em repouso, cerca de 25% do sangue passa pelos órgãos da digestão."]
+    ];
+    const chave = modo + (fis.temp > 37.1);
+    if (!forcar && chave === modoTxt && box.childElementCount) {   // só atualiza os números
+      L.forEach(([id, t], i) => { const p = box.children[i] && box.children[i].querySelector("p"); if (p && p.innerHTML !== t) p.innerHTML = t; });
+      return;
+    }
+    modoTxt = chave;
+    box.innerHTML = L.map(([id, t]) => `<div class="sis-mov-item"><i style="background:${D.sistemas[id].cor}"></i><div><b>${D.sistemas[id].nome}</b><p>${t}</p></div></div>`).join("");
+  }
+  function desenharGraficoMov() {
+    const cv = $("#cvMov"); if (!cv) return;
+    const r = cv.getBoundingClientRect(); if (!r.width || r.bottom < 0 || r.top > innerHeight) return;
+    const dpr = Math.min(2, devicePixelRatio || 1), w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    const c = cv.getContext("2d"); c.clearRect(0, 0, w, h);
+    const N = 180, linha = (campo, min, max, cor) => {
+      c.beginPath(); c.strokeStyle = cor; c.lineWidth = 2 * dpr;
+      histMov.forEach((s, i) => { const x = w - (histMov.length - 1 - i) / (N - 1) * w, y = h - 6 * dpr - (s[campo] - min) / (max - min) * (h - 12 * dpr); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+      c.stroke();
+    };
+    linha("fr", 0, 45, "#58b4e8"); linha("fc", 40, 190, "#e8574e");
+  }
+  function passoFisiologia(dt) {
+    if (!MOV) return;
+    const alvo = FIS[MOV.est.modo] || FIS.parado;
+    Object.keys(TAU_SOBE).forEach(k => {
+      const tau = alvo[k] > fis[k] ? TAU_SOBE[k] : TAU_DESCE[k];
+      fis[k] += (alvo[k] - fis[k]) * (1 - Math.exp(-dt / tau));
+    });
+    const emRecuperacao = Math.abs(fis.fc - FIS.parado.fc) > 1.5 || Math.abs(fis.temp - FIS.parado.temp) > 0.05;
+    const antes = fis.controla;
+    fis.controla = MOV.est.modo !== "parado" || emRecuperacao;
+    if (fis.controla) { est.bpm = Math.round(fis.fc); est.fr = Math.round(fis.fr); }
+    else if (antes) { est.bpm = 72; est.fr = 14; atuBpmExt && atuBpmExt(); atuFrExt && atuFrExt(); }
+    // pele: avermelhada (vasos dilatados) e brilhante (suor)
+    const pele = mats.pele;
+    if (pele && pele.userData.corBase && (fis.controla || antes)) {
+      const k = Math.min(1, Math.max(0, (fis.temp - 36.6) / 1.6));
+      pele.color.copy(pele.userData.corBase).lerp(new T.Color(0xe07a66), 0.4 * k);
+      const cc = fis.suor > 0.04 ? Math.min(0.9, fis.suor) : 0;
+      if ((pele.clearcoat > 0) !== (cc > 0)) pele.needsUpdate = true;
+      pele.clearcoat = cc; pele.clearcoatRoughness = 0.22;
+    }
+    tHist += dt;
+    if (tHist > 0.5 && (fis.controla || histMov.length)) {
+      tHist = 0; histMov.push({ fc: fis.fc, fr: fis.fr }); if (histMov.length > 180) histMov.shift();
+    }
+    tTxt += dt;
+    if (tTxt > 0.25) {
+      tTxt = 0;
+      const aba = $("#aba-simular"); if (!aba || aba.hidden) return;
+      const dc = fis.fc * fis.vs / 1000, ve = fis.fr * fis.vc, o2 = fis.met * 3.5 * PESO_KG / 1000, kcal = fis.met * 3.5 * PESO_KG / 200;
+      $("#mFc").textContent = Math.round(fis.fc) + " bpm";
+      $("#mFr").textContent = Math.round(fis.fr) + " /min";
+      $("#mVe").textContent = fmtN(ve) + " L/min";
+      $("#mDc").textContent = fmtN(dc, 1) + " L/min";
+      $("#mO2").textContent = fmtN(o2, 2) + " L/min";
+      $("#mKcal").textContent = fmtN(kcal, 1) + " kcal/min";
+      $("#mTemp").textContent = fmtN(fis.temp, 1) + " °C";
+      $("#mSuor").textContent = fis.suor < 0.08 ? "nenhum" : fis.suor < 0.4 ? "leve" : fis.suor < 0.75 ? "moderado" : "intenso";
+      if (fis.controla) { atuBpmExt && atuBpmExt(); atuFrExt && atuFrExt(); }
+      atualizarTextoSistemas(false);
+      desenharGraficoMov();
+      // passada e músculos em contração
+      const m = MOV.est, mov = MOV.ativo && m.modo !== "parado";
+      const fasePe = L => !mov ? "—" : m.apoio[L] ? "apoio (no chão)" : (m.modo === "correr" && !m.apoio.D && !m.apoio.E ? "voo (no ar)" : "balanço (no ar)");
+      $("#peD").textContent = fasePe("D"); $("#peE").textContent = fasePe("E");
+      $("#peD").parentNode.classList.toggle("no-chao", mov && m.apoio.D); $("#peE").parentNode.classList.toggle("no-chao", mov && m.apoio.E);
+      if (mov) {
+        const ativos = [];
+        Object.keys(MUSC_MOV).forEach(id => ["D", "E"].forEach(L => { if (m.ativ[id][L] > 0.45) ativos.push(`${MUSC_MOV[id]} ${L === "D" ? "direito" : "esquerdo"}`); }));
+        $("#movMusc").innerHTML = ativos.length ? `<b>Contraindo agora:</b> ${ativos.join(", ")}.` : "<b>Contraindo agora:</b> a perna está em transição; os músculos se preparam para a próxima fase.";
+      } else if (MOV.est.modo === "parado") {
+        $("#movMusc").innerHTML = fis.controla ? "<b>Recuperação:</b> o esforço acabou, mas o coração e a respiração voltam ao normal aos poucos, enquanto o corpo repõe o O₂ e elimina o calor e o CO₂ acumulados." : "Escolha <b>Andar</b> ou <b>Correr</b> para começar.";
+      }
+    }
+  }
+  function passoMovimento(dt) {
+    if (!MOV) return;
+    MOV.est.velAnim = $("#chkLento") && $("#chkLento").checked ? 0.3 : 1;
+    const movendo = MOV.passo(dt);
+    if (MOV.est.pausa && MOV.est.modo !== "parado") dt = 0;   // pausado: o relógio do corpo para também
+    // em movimento a pele é desenhada dos dois lados (a malha se abre entre as coxas)
+    const pele = mats.pele;
+    if (pele && movendo !== !!pele.userData.duplaMov) {
+      pele.userData.duplaMov = movendo;
+      const corte = pele.clippingPlanes && pele.clippingPlanes.length;
+      pele.side = movendo || corte ? T.DoubleSide : (pele.userData.ladoBase || T.FrontSide); pele.needsUpdate = true;
+    }
+    // esteira
+    const alvoOp = movendo ? 0.9 : 0;
+    esteira.material.opacity += (alvoOp - esteira.material.opacity) * Math.min(1, dt * 3);
+    esteira.visible = esteira.material.opacity > 0.01;
+    if (esteira.visible) esteira.material.map.offset.y = MOV.est.esteira * 4 / 9;
+    // músculos que estão contraindo acendem
+    const acender = movendo && (!$("#chkMusc") || $("#chkMusc").checked);
+    if (acender) {
+      matsMusc.forEach(mt => {
+        const a = MOV.est.ativ[mt.userData.idMov]; if (!a) return;
+        mt.emissive.setHex(0xffb020); mt.emissiveIntensity = 1.1;
+        mt.userData.ladoAtiv.D.value = a.D; mt.userData.ladoAtiv.E.value = a.E;
+      });
+      muscAceso = true;
+    } else if (muscAceso) {
+      muscAceso = false;
+      matsMusc.forEach(mt => { mt.emissive.setHex(0); mt.userData.ladoAtiv.D.value = 1; mt.userData.ladoAtiv.E.value = 1; });
+      if (est.selecionado) realcar(est.selecionado, 0xffaa22, 0.55);
+    }
+    passoFisiologia(dt);
   }
 
   /* ---- digestão ---- */
@@ -919,7 +1174,7 @@
     if (a.aba === "identificar") { trocarAba("desafio"); }
     if (a.sim) {
       trocarAba("simular");
-      const alvo = { coracao: "#simCoracao", digestao: "#btnDigest", reflexo: "#btnReflexo", drogas: "#cvSinapse", movimento: "#rFlex", respiracao: "#rFr", puberdade: "#rIdade" }[a.sim];
+      const alvo = { locomocao: "#simMovimento", coracao: "#simCoracao", digestao: "#btnDigest", reflexo: "#btnReflexo", drogas: "#cvSinapse", movimento: "#rFlex", respiracao: "#rFr", puberdade: "#rIdade" }[a.sim];
       const n = alvo && $(alvo);
       if (n) { const card = n.closest(".cartao"); card.scrollIntoView({ behavior: "smooth", block: "start" }); card.classList.add("piscar"); setTimeout(() => card.classList.remove("piscar"), 1600); }
       if (a.sim === "puberdade") { est.puberdadeAtiva = true; atualizarPuberdade(); }
@@ -1063,6 +1318,7 @@
   $("#btnFecharPainel").addEventListener("click", () => document.body.classList.remove("painel-aberto"));
   $("#btnReset").addEventListener("click", () => {
     aplicarPreset("tudo"); definirSexo("feminino"); est.flexao = 0; aplicarFlexao(); corpo.raiz.scale.setScalar(1); est.puberdadeAtiva = false;
+    definirMovimento("parado");
     ["hipotalamo", "hipofise", "ovarios", "testiculos"].forEach(limparRealce);
     if ($("#chkCronico")) { $("#chkCronico").checked = false; $("[data-droga=nenhuma]").click(); } est.droga3d = false;
     $("#corteTipo").value = "nenhum"; aplicarCorte(); verCorpoInteiro("frente"); desselecionar();
@@ -1094,6 +1350,7 @@
     refs.pulmoes.forEach(p => { const b = p.userData.escalaBase; p.scale.set(b.x * (1 + amp * r), b.y * (1 + amp * 0.6 * r), b.z * (1 + amp * r)); });
     refs.diafragma.position.y = refs.diafragma.userData.posBase.y - 0.12 * r; refs.diafragma.scale.y = 1 - 0.06 * r;
     const vf = document.getElementById("vFase"); if (vf) vf.textContent = r > 0 ? (Math.cos(faseResp * Math.PI * 2) > 0 ? "inspiração" : "expiração") : (Math.cos(faseResp * Math.PI * 2) < 0 ? "expiração" : "inspiração");
+    passoMovimento(dt);
     passoDigestao(dt); passoReflexo(dt); passoRim(dt); passoPuberdade(tempo); passoDrogas(dt, tempo);
     if (fogo.visible) fogo.scale.set(1, 1 + 0.2 * Math.sin(tempo * 20), 1);
     halo.scale.setScalar(1 + 0.3 * Math.sin(tempo * 15));
@@ -1111,7 +1368,7 @@
       <p>Escolha um dos ${Object.keys(D.sistemas).length} sistemas para vê-lo sozinho no modelo, ou clique direto em um órgão para abrir a ficha dele.</p>
       <div class="grade-sis">${Object.entries(D.sistemas).map(([k, s]) => `<button class="sis-btn" data-sis="${k}"><i style="background:${s.cor}"></i><span>${s.nome}</span></button>`).join("")}</div></div>
       <div class="cartao pequeno"><h4>O que mais dá para fazer</h4><ul class="lista">
-        <li>Em <b>Simular</b>, veja o coração bater, a respiração, a digestão e o arco reflexo.</li>
+        <li>Em <b>Simular</b>, coloque o corpo para <b>andar ou correr</b> e veja o coração bater, a respiração, a digestão e o arco reflexo.</li>
         <li>Em <b>BNCC</b>, escolha uma habilidade e vá direto ao recurso.</li>
         <li>Em <b>Quiz</b> e <b>Desafio</b>, teste o que você aprendeu.</li></ul></div>`;
     painelInfo.querySelectorAll("[data-sis]").forEach(b => b.onclick = () => {
@@ -1121,7 +1378,7 @@
       aplicarTudo(); mostrarSistema(id);
     });
   }
-  window.APP = { aplicarPreset, selecionar, garantirVisivel, trocarAba, voarPara, est, falar, info: (id, daLupa) => mostrarInfo(id, null, daLupa) };
+  window.APP = { mov: MOV, aplicarPreset, selecionar, garantirVisivel, trocarAba, voarPara, est, falar, info: (id, daLupa) => mostrarInfo(id, null, daLupa) };
   if (window.LUPA) { LUPA.iniciar({ pecas, info: (id, daLupa) => mostrarInfo(id, null, daLupa) }); $("#btnLupa").onclick = () => LUPA.abrir("olho"); }
   redimensionar();
   laco();

@@ -15,7 +15,7 @@ window.SETAS = (function () {
     const pts = [];
     malhas.forEach(m => {
       const p = m.geometry && m.geometry.attributes.position; if (!p) return;
-      for (let i = 0; i < p.count; i += passo) pts.push({ m, x: p.getX(i), y: p.getY(i), z: p.getZ(i) });
+      for (let i = 0; i < p.count; i += passo) pts.push({ m, i, x: p.getX(i), y: p.getY(i), z: p.getZ(i) });
     });
     return pts;
   }
@@ -28,7 +28,9 @@ window.SETAS = (function () {
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i];
       if (malhaOk ? !malhaOk(p.m) : !p.m.visible) continue;
-      v.set(p.x, p.y, p.z).applyMatrix4(p.m.matrixWorld);
+      v.set(p.x, p.y, p.z);
+      if (p.m.isSkinnedMesh && p.m.skeleton) p.m.boneTransform(p.i, v);   // corpo em movimento
+      v.applyMatrix4(p.m.matrixWorld);
       if (aceitar && !aceitar(v)) continue;
       const d = v.distanceToSquared(cam);
       if (d < dmin) { dmin = d; melhor = melhor || new T.Vector3(); melhor.copy(v); }
