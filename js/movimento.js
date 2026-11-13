@@ -24,7 +24,7 @@ window.MOVIMENTO = (function () {
     const DEF = [];
     const osso = (nome, pai, lado, junta, a, b, r, kA, kB, zs) => DEF.push({ nome, pai, lado, junta, a, b, r, kA, kB, zs: zs || 1 });
     osso("quadril", null, 0, V(0, 9.3, -0.15), V(0, 8.45, -0.15), V(0, 10.1, -0.2), 1.3, 2.5, 0.6, 1.3);
-    osso("lombar", "quadril", 0, V(0, 10.1, -0.3), V(0, 10.1, -0.15), V(0, 11.7, -0.15), 1.3, 0.6, 0.6, 1.3);
+    osso("lombar", "quadril", 0, V(0, 10.1, -0.3), V(0, 10.1, -0.15), V(0, 11.7, -0.15), 1.15, 0.6, 0.6, 1.3);   // cintura mais estreita
     osso("torax", "lombar", 0, V(0, 11.7, -0.3), V(0, 11.7, -0.15), V(0, 14.0, -0.2), 1.35, 0.6, 0.8, 1.3);
     osso("pescoco", "torax", 0, V(0, 14.15, -0.25), V(0, 14.1, -0.2), V(0, 15.3, -0.1), 0.65, 0.8, 0.6, 1);
     osso("cabeca", "pescoco", 0, V(0, 15.3, -0.15), V(0, 15.4, 0), V(0, 16.9, 0), 1.0, 0.6, 1, 1);
@@ -32,18 +32,18 @@ window.MOVIMENTO = (function () {
       const L = s < 0 ? "D" : "E", m = v => V(v.x * (s < 0 ? 1 : -1), v.y, v.z);
       const ombro = V(-1.62, 13.85, -0.2), cot = V(COT.x, COT.y, COT.z), punho = V(-2.55, 8.95, 0.15), dedos = V(-2.77, 7.3, 0.9);
       const coxa = V(-0.88, 8.85, -0.2), joelho = V(-0.78, 4.58, -0.17), torn = V(-0.98, 0.62, -0.1);
-      osso("ombro" + L, "torax", s, m(ombro), m(ombro), m(cot), 0.5, 2.2, 0.6);
+      osso("ombro" + L, "torax", s, m(ombro), m(ombro), m(cot), 0.55, 2.2, 1.2);
       // antebraço em duas partes: a rotação (pronação) se distribui ao longo dele, como no rádio girando sobre a ulna
       const meioAnt = cot.clone().lerp(punho, 0.5);
-      osso("cotovelo" + L, "ombro" + L, s, m(cot), m(cot), m(meioAnt), 0.42, 0.6, 0.8);
-      osso("antebraco" + L, "cotovelo" + L, s, m(meioAnt), m(meioAnt), m(punho), 0.4, 0.8, 0.6);
+      osso("cotovelo" + L, "ombro" + L, s, m(cot), m(cot), m(meioAnt), 0.5, 0.6, 0.8);
+      osso("antebraco" + L, "cotovelo" + L, s, m(meioAnt), m(meioAnt), m(punho), 0.48, 0.8, 0.6);
       // mão: punho → nós dos dedos (articulação metacarpofalângica) → meio dos dedos (interfalângica)
       const nos = V(-2.72, 8.02, 0.47), meio = V(-2.74, 7.68, 0.6);
       osso("punho" + L, "antebraco" + L, s, m(punho), m(punho), m(nos), 0.45, 0.6, 1.6);
       osso("dedos" + L, "punho" + L, s, m(nos), m(nos), m(meio), 0.45, 1.6, 1.2);
       osso("dedos2" + L, "dedos" + L, s, m(meio), m(meio), m(dedos), 0.45, 1.2, 1);
       osso("polegar" + L, "punho" + L, s, m(V(-2.98, 8.7, 0.55)), m(V(-2.98, 8.7, 0.6)), m(V(-3.1, 8.55, 1.2)), 0.3, 1.5, 1);
-      osso("coxa" + L, "quadril", s, m(coxa), m(coxa), m(joelho), 0.7, 2.5, 0.6);
+      osso("coxa" + L, "quadril", s, m(coxa), m(coxa), m(joelho), 0.7, 2.5, 1.2);
       osso("joelho" + L, "coxa" + L, s, m(joelho), m(joelho), m(torn), 0.55, 0.6, 2.0);
       osso("tornozelo" + L, "joelho" + L, s, m(torn), m(V(-1.0, 0.35, -0.35)), m(V(-1.15, 0.2, 1.15)), 0.45, 1, 1);
     });
@@ -79,7 +79,19 @@ window.MOVIMENTO = (function () {
       return { ax, ay, az, dx, dy, dz, l2, l: Math.sqrt(l2), r: d.r, kA: d.kA, kB: d.kB, zs, lado: d.lado, perna: /^(coxa|joelho|tornozelo)/.test(d.nome) };
     });
     const SUAVE = 0.14;
-    const nTmp = new Float32Array(NB);
+    const nTmp = new Float32Array(NB), tTmp = new Float32Array(NB);
+    // Só ossos vizinhos (ligados por uma articulação) podem dividir um ponto, e só perto dessa articulação:
+    // assim nada fica "preso" entre o tronco e um braço ou perna que se move (veias e nervos esticados para fora do corpo).
+    const PAI = DEF.map(d => d.pai ? IDX[d.pai] : -1);
+    const perto = t => t < 0.15 ? 1 : t > 0.45 ? 0 : 1 - (t - 0.15) / 0.3;   // 1 junto da articulação, 0 longe dela
+    function podeMisturar(x, y) {   // fator de 0 a 1
+      if (PAI[y] === x) return perto(tTmp[y]);            // y é filho de x: perto do início de y
+      if (PAI[x] === y) return perto(tTmp[x]);            // y é pai de x: perto do início de x
+      if (PAI[x] >= 0 && PAI[x] === PAI[y]) return Math.min(perto(tTmp[x]), perto(tTmp[y]));   // irmãos, na articulação comum
+      if (PAI[x] >= 0 && PAI[PAI[x]] === y) return perto(tTmp[x]) * perto(tTmp[PAI[x]]);   // avô: junto de duas articulações seguidas (punho e base do polegar)
+      if (PAI[y] >= 0 && PAI[PAI[y]] === x) return perto(tTmp[y]) * perto(tTmp[PAI[y]]);
+      return 0;
+    }
     // calcula até 4 ossos e pesos para o ponto (x,y,z) do corpo em repouso
     function pesos(x, y, z, iOut, wOut) {
       let nmin = 1e9;
@@ -92,17 +104,21 @@ window.MOVIMENTO = (function () {
         const qx = px - s.dx * t, qy = py - s.dy * t, qz = pz - s.dz * t;
         const alem = t < 0 ? -t * s.l * s.kA : t > 1 ? (t - 1) * s.l * s.kB : 0;
         const n = Math.sqrt(qx * qx + qy * qy + qz * qz + alem * alem) / s.r;
-        nTmp[i] = n; if (n < nmin) nmin = n;
+        nTmp[i] = n; tTmp[i] = t; if (n < nmin) nmin = n;
       }
       // os 4 menores
       for (let k = 0; k < 4; k++) { iOut[k] = 0; wOut[k] = 0; }
-      let soma = 0;
-      for (let k = 0; k < 4; k++) {
+      let soma = 0, k = 0, princ = -1;
+      while (k < 4) {
         let m = -1, mv = 1e9;
         for (let i = 0; i < NB; i++) if (nTmp[i] < mv) { mv = nTmp[i]; m = i; }
         if (m < 0 || mv > nmin + SUAVE * 4.6) break;   // contribuição < 1%
-        const w = Math.exp(-(mv - nmin) / SUAVE);
-        iOut[k] = m; wOut[k] = w; soma += w; nTmp[m] = 1e9;
+        nTmp[m] = 1e9;
+        const f = princ < 0 ? 1 : podeMisturar(princ, m);
+        if (f < 0.01) continue;
+        if (princ < 0) princ = m;
+        const w = Math.exp(-(mv - nmin) / SUAVE) * f;
+        iOut[k] = m; wOut[k] = w; soma += w; k++;
       }
       for (let k = 0; k < 4; k++) wOut[k] /= soma;
     }
@@ -119,7 +135,8 @@ window.MOVIMENTO = (function () {
       osso_lacrimal: "cabeca", mandibula: "cabeca"
     };
     const LADOS = new Set(["coxa", "joelho", "tornozelo", "ombro", "cotovelo", "punho", "dedos", "dedos2", "polegar", "antebraco"]);
-    const PERNA_D = new Set(["coxaD", "joelhoD", "tornozeloD"].map(n => IDX[n])), PERNA_E = new Set(["coxaE", "joelhoE", "tornozeloE"].map(n => IDX[n]));
+    // cadeia de cada osso: 0 = tronco/cabeça, 1/2 = perna D/E, 3/4 = braço D/E
+    const CADEIA = DEF.map(d => /^(coxa|joelho|tornozelo)/.test(d.nome) ? (d.lado < 0 ? 1 : 2) : d.lado ? (d.lado < 0 ? 3 : 4) : 0);
     function ossoRigido(m) {
       if (m.userData.sistema !== "esqueletico") return null;
       return RIGIDO[m.userData.id] || null;
@@ -148,21 +165,24 @@ window.MOVIMENTO = (function () {
       }
       geo.setAttribute("skinIndex", new T.BufferAttribute(si, 4));
       geo.setAttribute("skinWeight", new T.BufferAttribute(sw, 4, true));
-      // Na pele, as coxas encostam uma na outra e a malha liga as duas pernas. Em movimento,
-      // esses triângulos de "ponte" virariam uma membrana esticada: são retirados enquanto o corpo se move.
+      // Na posição de repouso, as coxas se encostam e os braços encostam na cintura: a malha "cola" as partes.
+      // Em movimento, esses triângulos de "ponte" virariam membranas esticadas para fora do corpo; são retirados
+      // enquanto o corpo se move. Ponte = triângulo com um ponto que segue um membro e outro que não o segue nada.
       if (geo.index) {
-        const ladoPerna = new Int8Array(n);
-        for (let i = 0; i < n; i++) {
-          let d = 0, e = 0;
-          for (let k = 0; k < 4; k++) { const b = si[i * 4 + k], w = sw[i * 4 + k]; if (PERNA_D.has(b)) d += w; else if (PERNA_E.has(b)) e += w; }
-          ladoPerna[i] = d > 128 ? -1 : e > 128 ? 1 : 0;
-        }
+        const cad = new Uint8Array(n * 5);   // peso de cada cadeia (0 = tronco, 1..4 = membros) por vértice
+        for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) cad[i * 5 + CADEIA[si[i * 4 + k]]] += sw[i * 4 + k];
+        const dom = i => { let c = 0; for (let q = 1; q < 5; q++) if (cad[i * 5 + q] > cad[i * 5 + c]) c = q; return c; };
         const idx = geo.index.array, fica = [];
         let tirou = 0;
         for (let t = 0; t < idx.length; t += 3) {
-          const a = ladoPerna[idx[t]], b = ladoPerna[idx[t + 1]], c = ladoPerna[idx[t + 2]];
-          if ((a < 0 || b < 0 || c < 0) && (a > 0 || b > 0 || c > 0)) { tirou++; continue; }
-          fica.push(idx[t], idx[t + 1], idx[t + 2]);
+          const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+          let ponte = false;
+          for (const v of [a, b, c]) {
+            const ch = dom(v); if (!ch) continue;
+            if (cad[a * 5 + ch] < 13 || cad[b * 5 + ch] < 13 || cad[c * 5 + ch] < 13) { ponte = true; break; }
+          }
+          if (ponte) { tirou++; continue; }
+          fica.push(a, b, c);
         }
         if (tirou) { geo.userData.indiceOrig = geo.index; geo.userData.indiceMov = new T.BufferAttribute(n > 65535 ? new Uint32Array(fica) : new Uint16Array(fica), 1); }
       }
