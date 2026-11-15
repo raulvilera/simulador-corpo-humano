@@ -67,6 +67,7 @@ h4 { margin-top: 1.1em; font-size: .82rem; font-weight: 700; color: var(--muted)
 .aba.ativo { color: var(--txt); }
 .aba.ativo::after { background: var(--acento); }
 .aba:focus-visible { outline-offset: -3px; }
+.aba-ic { display: none; }
 .busca-wrap { margin-left: auto; position: relative; }
 .busca-ic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 #busca { width: 240px; padding: 8px 12px 8px 36px; border-radius: 99px; border: 1px solid var(--borda); background: var(--card); outline: none; }
@@ -295,8 +296,22 @@ hr { border: 0; border-top: 1px solid var(--borda-suave); margin: 16px 0; }
   body.painel-aberto .painel { transform: none; }
   .fechar-painel { position: absolute; top: 4px; right: 8px; }
   .marca h1 { font-size: 1rem; } .marca > div { display: none; }
-  .busca-wrap { display: none; }
-  .abas { margin-left: 0; flex: 1; }
+  /* abas viram uma barra de navegação fixa no rodapé, com ícone + nome, todas visíveis */
+  :root { --nav: calc(62px + env(safe-area-inset-bottom, 0px)); }
+  .layout { height: calc(100vh - var(--topo) - var(--nav)); height: calc(100dvh - var(--topo) - var(--nav)); }
+  .lateral { bottom: var(--nav); }
+  .painel { bottom: var(--nav); max-height: calc(100dvh - var(--topo) - var(--nav)); }
+  .topo .abas { position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; margin: 0; height: var(--nav); padding: 4px 4px env(safe-area-inset-bottom, 0px); gap: 0; overflow: visible; background: var(--bg2); border-top: 1px solid var(--borda); box-shadow: 0 -6px 18px rgba(0, 0, 0, .18); }
+  .aba { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0 2px; font-size: .7rem; line-height: 1.1; border-radius: 12px; }
+  .aba span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .aba-ic { display: grid; width: 44px; height: 28px; padding: 4px 12px; border-radius: 99px; stroke-width: 2; transition: background .2s; }
+  .aba::after { display: none; }
+  .aba.ativo { color: var(--acento); }
+  body.painel-aberto .aba.ativo .aba-ic { background: color-mix(in srgb, var(--acento) 22%, transparent); }
+  .busca-wrap { flex: 1; min-width: 0; margin-left: 4px; }
+  #busca { width: 100%; }
+  #sugestoes { left: 0; right: auto; width: min(320px, calc(100vw - 16px)); }
+  #btnTema { margin-left: auto; }
   .lab-grade { grid-template-columns: 1fr; }
   .ajuda-gestos { display: none; }
   .mini { opacity: 1; }
@@ -306,7 +321,8 @@ hr { border: 0; border-top: 1px solid var(--borda-suave); margin: 16px 0; }
   .ferramentas { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 8px 16px; }
   .grupo-f { flex: none; }
   .grupo-f button { padding: 6px 10px; font-size: .8rem; }
-  .topo { gap: 6px; padding: 0 8px; } .aba { padding: 0 9px; font-size: .86rem; } .aba::after { left: 9px; right: 9px; }
+  .topo { gap: 6px; padding: 0 8px; }
+  .aba { font-size: .64rem; letter-spacing: -.01em; padding: 0; }
   .logo { display: none; }
   .modal-caixa { padding: 0 16px 16px; }
 }

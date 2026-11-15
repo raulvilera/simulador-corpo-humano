@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/estilo.css?v=15">
+  <link rel="stylesheet" href="css/estilo.css?v=16">
 </head>
 <body class="painel-aberto">
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -41,6 +41,12 @@
       <symbol id="i-fechar" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="i-tema" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></symbol>
       <symbol id="i-arquivo" viewBox="0 0 24 24"><path d="M12 16V5M7.5 9.5L12 5l4.5 4.5M5 19h14"/></symbol>
+      <symbol id="i-explorar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+      <symbol id="i-simular" viewBox="0 0 24 24"><path d="M3 12h4l2-5 3.5 10 2.5-7 1.5 2H21"/></symbol>
+      <symbol id="i-bncc" viewBox="0 0 24 24"><path d="M4 5.5C6.5 4 9.5 4 12 6c2.5-2 5.5-2 8-.5V19c-2.5-1.5-5.5-1.5-8 .5-2.5-2-5.5-2-8-.5z"/><path d="M12 6v13.5"/></symbol>
+      <symbol id="i-quiz" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6v.4"/><path d="M12 17h.01"/></symbol>
+      <symbol id="i-desafio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></symbol>
+      <symbol id="i-saiba" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></symbol>
     </defs>
   </svg>
 
@@ -53,13 +59,13 @@
   <header class="topo">
     <button class="icone so-movel" id="btnPainelSis" title="Sistemas" aria-label="Abrir lista de sistemas"><svg class="ic"><use href="#i-menu"/></svg></button>
     <div class="marca"><span class="logo"><svg class="ic"><use href="#i-marca"/></svg></span><div><h1>Corpo Humano 3D</h1><small>Simulador didático alinhado à BNCC</small></div></div>
-    <nav class="abas" role="tablist">
-      <button class="aba ativo" data-aba="explorar">Explorar</button>
-      <button class="aba" data-aba="simular">Simular</button>
-      <button class="aba" data-aba="bncc">BNCC</button>
-      <button class="aba" data-aba="quiz">Quiz</button>
-      <button class="aba" data-aba="desafio">Desafio</button>
-      <button class="aba" data-aba="saiba">Saiba mais</button>
+    <nav class="abas" role="tablist" aria-label="Seções do app">
+      <button class="aba ativo" data-aba="explorar" role="tab"><svg class="ic aba-ic"><use href="#i-explorar"/></svg><span>Explorar</span></button>
+      <button class="aba" data-aba="simular" role="tab"><svg class="ic aba-ic"><use href="#i-simular"/></svg><span>Simular</span></button>
+      <button class="aba" data-aba="bncc" role="tab"><svg class="ic aba-ic"><use href="#i-bncc"/></svg><span>BNCC</span></button>
+      <button class="aba" data-aba="quiz" role="tab"><svg class="ic aba-ic"><use href="#i-quiz"/></svg><span>Quiz</span></button>
+      <button class="aba" data-aba="desafio" role="tab"><svg class="ic aba-ic"><use href="#i-desafio"/></svg><span>Desafio</span></button>
+      <button class="aba" data-aba="saiba" role="tab"><svg class="ic aba-ic"><use href="#i-saiba"/></svg><span>Saiba mais</span></button>
     </nav>
     <div class="busca-wrap">
       <svg class="ic busca-ic"><use href="#i-lupa"/></svg>
@@ -183,7 +189,7 @@
   <script src="js/movimento.js?v=4"></script>
   <script src="js/drogas.js?v=13"></script>
   <script src="js/simulacoes2d.js?v=9"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/app.js?v=17"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () { }); });
