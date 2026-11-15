@@ -1396,13 +1396,21 @@
 
   /* -------------------------------- ABAS -------------------------------- */
   function trocarAba(nome) {
-    $$(".aba").forEach(b => b.classList.toggle("ativo", b.dataset.aba === nome));
+    $$(".aba").forEach(b => { const on = b.dataset.aba === nome; b.classList.toggle("ativo", on); b.setAttribute("aria-selected", on); });
     $$(".conteudo-aba").forEach(c => c.hidden = c.id !== "aba-" + nome);
     if (nome !== "desafio" && est.modo === "desafio") { est.modo = "explorar"; est.desafio = null; }
     if (nome === "desafio" && !est.desafio) montarDesafio();
     document.body.classList.add("painel-aberto");
   }
-  $$(".aba").forEach(b => b.addEventListener("click", () => trocarAba(b.dataset.aba)));
+  $$(".aba").forEach(b => b.addEventListener("click", () => {
+    // No celular, tocar de novo na aba já ativa recolhe (ou reabre) o painel.
+    const movel = window.matchMedia("(max-width: 980px)").matches;
+    if (movel && b.classList.contains("ativo") && document.body.classList.contains("painel-aberto")) {
+      document.body.classList.remove("painel-aberto"); return;
+    }
+    document.body.classList.remove("sis-aberto");
+    trocarAba(b.dataset.aba);
+  }));
   $("#btnPainelSis").addEventListener("click", () => document.body.classList.toggle("sis-aberto"));
   $("#btnFecharPainel").addEventListener("click", () => document.body.classList.remove("painel-aberto"));
   $("#btnReset").addEventListener("click", () => {
