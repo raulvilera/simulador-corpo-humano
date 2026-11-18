@@ -421,3 +421,19 @@ hr { border: 0; border-top: 1px solid var(--borda-suave); margin: 16px 0; }
 .gland span { font-size: .78rem; color: var(--acento); font-weight: 700; }
 .gland small { font-size: .8rem; color: var(--muted); line-height: 1.35; }
 
+/* ---------- modo tela cheia: só o corpo; sistemas num menu ☰ com fundo transparente ---------- */
+.foco-btn { display: none; }
+body.foco .topo, body.foco .painel, body.foco .ferramentas, body.foco .ajuda-gestos, body.foco .so-movel { display: none !important; }
+body.foco .layout { grid-template-columns: 1fr; height: 100vh; height: 100dvh; }
+body.foco .foco-btn { display: grid; place-items: center; position: fixed; top: 14px; z-index: 40; width: 46px; height: 46px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--txt) 25%, transparent); background: color-mix(in srgb, var(--bg2) 55%, transparent); color: var(--txt); cursor: pointer; backdrop-filter: blur(4px); font-size: 1.15rem; transition: background .2s; }
+body.foco .foco-btn:hover { background: color-mix(in srgb, var(--bg2) 85%, transparent); }
+#btnFocoMenu { left: 14px; align-content: center; gap: 5px; }
+#btnFocoMenu span { display: block; width: 22px; height: 2.5px; border-radius: 2px; background: currentColor; transition: transform .25s, opacity .2s; }
+body.foco.sis-aberto #btnFocoMenu span:nth-child(1) { transform: translateY(7.5px) rotate(45deg); }
+body.foco.sis-aberto #btnFocoMenu span:nth-child(2) { opacity: 0; }
+body.foco.sis-aberto #btnFocoMenu span:nth-child(3) { transform: translateY(-7.5px) rotate(-45deg); }
+#btnFocoSair { right: 14px; }
+body.foco .lateral { position: fixed; top: 0; bottom: 0; left: 0; width: min(310px, 86vw); z-index: 35; padding: 72px 16px 24px; transform: translateX(-105%); transition: transform .28s ease; background: color-mix(in srgb, var(--bg2) 52%, transparent); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); border-right: 1px solid color-mix(in srgb, var(--txt) 18%, transparent); box-shadow: none; text-shadow: 0 0 4px var(--bg2), 0 0 2px var(--bg2); }
+body.foco.sis-aberto #rotulos { opacity: .18; transition: opacity .25s; }
+body.foco.sis-aberto .lateral { transform: none; }
+body.foco .lateral section { border-bottom-color: color-mix(in srgb, var(--txt) 14%, transparent); }
