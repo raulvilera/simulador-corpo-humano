@@ -227,6 +227,27 @@
     const v = VISTAS[nome]; est.vistaInteira = null; voarPara(new T.Vector3(...v[0]), new T.Vector3(...v[1]));
   }));
   controles.addEventListener("start", () => { est.vistaInteira = null; });
+  /* percorrer o corpo na vertical: sobe ou desce a câmera e o ponto de mira juntos, sem mudar o ângulo (o corpo continua em pé) */
+  const ALT_MIN = 0, ALT_MAX = 17.6, inAlt = $("#altura");
+  function moverAltura(y) {
+    y = Math.min(ALT_MAX, Math.max(ALT_MIN, y)); const dy = y - controles.target.y; if (!dy) return;
+    anim = null; controles.target.y += dy; camera.position.y += dy; est.vistaInteira = null; controles.update();
+  }
+  let altArrastando = false, subindo = null;
+  inAlt.addEventListener("input", () => { altArrastando = true; moverAltura(+inAlt.value); });
+  inAlt.addEventListener("change", () => { altArrastando = false; });
+  function segurar(btn, passo) {   // clique = um passo; segurado = movimento contínuo
+    const parar = () => { clearInterval(subindo); subindo = null; };
+    btn.addEventListener("pointerdown", e => { e.preventDefault(); moverAltura(controles.target.y + passo); parar(); subindo = setInterval(() => moverAltura(controles.target.y + passo / 4), 40); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(t => btn.addEventListener(t, parar));
+  }
+  segurar($("#btnSubir"), 0.8); segurar($("#btnDescer"), -0.8);
+  renderer.domElement.addEventListener("wheel", e => { if (!e.shiftKey) return; e.preventDefault(); e.stopImmediatePropagation(); const d = e.deltaY || e.deltaX; moverAltura(controles.target.y - Math.sign(d) * 0.6); }, { capture: true, passive: false });
+  document.addEventListener("keydown", e => {
+    if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (e.key === "ArrowUp" || e.key === "PageUp") { e.preventDefault(); moverAltura(controles.target.y + 0.6); }
+    else if (e.key === "ArrowDown" || e.key === "PageDown") { e.preventDefault(); moverAltura(controles.target.y - 0.6); }
+  });
   $("#btnGirar").addEventListener("click", e => { est.girar = !est.girar; e.currentTarget.classList.toggle("ativo", est.girar); });
   $("#btnFoto").addEventListener("click", () => {
     renderer.render(cena, camera);
@@ -1432,6 +1453,7 @@
       controles.target.lerpVectors(anim.a0, anim.a1, k); camera.position.lerpVectors(anim.p0, anim.p1, k);
       if (anim.t >= 1) anim = null;
     }
+    if (!altArrastando) { const v = Math.min(ALT_MAX, Math.max(ALT_MIN, controles.target.y)); if (Math.abs(+inAlt.value - v) > 0.02) inAlt.value = v; }
     if (est.girar) corpo.raiz.rotation.y += dt * 0.35, grupoImp.rotation.y = corpo.raiz.rotation.y;
     // coração: sístole/diástole
     faseCor += dt * est.bpm / 60;
