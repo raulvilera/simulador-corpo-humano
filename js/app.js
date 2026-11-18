@@ -716,6 +716,8 @@
       <div class="destaque" id="txtDig">Clique em “Iniciar” para começar.</div>
     </div>
 
+    ${FISIOL.cartaoAcoes()}
+
     <div class="cartao sim">
       <h3>⚡ Arco reflexo e substâncias psicoativas <span class="cod">EF06CI07 · EF06CI10 · EM13CNT207</span></h3>
       <p class="muted">A mão encosta em algo quente: o impulso sobe pelo nervo sensitivo até a medula, que responde pelo nervo motor, e o bíceps puxa o braço.</p>
@@ -729,6 +731,7 @@
       <h3>🧠 Drogas psicoativas e atividade cerebral <span class="cod">EM13CNT207 · EF06CI10</span></h3>
       <p class="muted">Drogas psicoativas agem nas <b>sinapses</b>, o ponto em que um neurônio passa o sinal ao seguinte. Escolha um tipo e veja o que muda na sinapse e na atividade do cérebro.</p>
       <div class="linha-btn" id="tiposDroga">${Object.entries(DROGAS.MODOS).map(([k, m]) => `<button class="btn ${k === "nenhuma" ? "ativo" : ""}" data-droga="${k}">${m.rotulo}</button>`).join("")}</div>
+      ${FISIOL.chipsDrogas()}
       <p class="mini-txt muted" id="exDroga"></p>
       <canvas id="cvSinapse" class="cv-sinapse" role="img" aria-label="Animação de uma sinapse: neurotransmissores saem de um neurônio e se ligam aos receptores do neurônio seguinte"></canvas>
       <div class="legenda-sin" id="legSinapse"></div>
@@ -771,6 +774,8 @@
       <div class="destaque" id="txtPub"></div>
       <button class="btn link" id="btnPub3d">Destacar glândulas no modelo</button>
     </div>
+
+    ${FISIOL.cartaoHormonios()}
 
     <div class="cartao">
       <h3>🧪 Laboratórios interativos</h3>
@@ -850,6 +855,8 @@
     $("#chkCronico").onchange = e => { sinapse.definir(sinapse.modo, e.target.checked); atuDroga(true); };
     $("#btnDroga3d").onclick = () => { est.droga3d = true; aplicarPreset("drogas"); desselecionar(); voarPara(new T.Vector3(0, 16.25, -0.1), new T.Vector3(5.2, 17.2, 5.6)); };
     atuDroga(false);
+    FISIOL.ligar(s, k => { const b = s.querySelector(`[data-droga="${k}"]`); if (b) b.click(); });
+    s.querySelectorAll("[data-droga]").forEach(b => b.addEventListener("click", e => { if (e.isTrusted) FISIOL.limparDroga(); }));
     $("#rFlex").oninput = e => { est.flexao = +e.target.value; aplicarFlexao(); };
     $("#rAgua").oninput = e => { est.hidrat = +e.target.value; atuRim(); };
     $("#btnUrinar").onclick = () => { est.bexiga = 0.05; };
@@ -1458,7 +1465,7 @@
   $("#btnPainelSis").addEventListener("click", () => document.body.classList.toggle("sis-aberto"));
   $("#btnFecharPainel").addEventListener("click", () => document.body.classList.remove("painel-aberto"));
   $("#btnReset").addEventListener("click", () => {
-    aplicarPreset("tudo"); definirSexo("feminino"); est.flexao = 0; aplicarFlexao(); corpo.raiz.scale.setScalar(1); est.puberdadeAtiva = false;
+    FISIOL.parar(); aplicarPreset("tudo"); definirSexo("feminino"); est.flexao = 0; aplicarFlexao(); corpo.raiz.scale.setScalar(1); est.puberdadeAtiva = false;
     definirMovimento("parado");
     ["hipotalamo", "hipofise", "ovarios", "testiculos"].forEach(limparRealce);
     if ($("#chkCronico")) { $("#chkCronico").checked = false; $("[data-droga=nenhuma]").click(); } est.droga3d = false;
@@ -1492,7 +1499,7 @@
     refs.diafragma.position.y = refs.diafragma.userData.posBase.y - 0.12 * r; refs.diafragma.scale.y = 1 - 0.06 * r;
     const vf = document.getElementById("vFase"); if (vf) vf.textContent = r > 0 ? (Math.cos(faseResp * Math.PI * 2) > 0 ? "inspiração" : "expiração") : (Math.cos(faseResp * Math.PI * 2) < 0 ? "expiração" : "inspiração");
     passoMovimento(dt); passoHalosEndo(tempo);
-    passoDigestao(dt); passoReflexo(dt); passoRim(dt); passoPuberdade(tempo); passoDrogas(dt, tempo);
+    passoDigestao(dt); passoReflexo(dt); passoRim(dt); passoPuberdade(tempo); passoDrogas(dt, tempo); FISIOL.passo(dt);
     if (fogo.visible) fogo.scale.set(1, 1 + 0.2 * Math.sin(tempo * 20), 1);
     halo.scale.setScalar(1 + 0.3 * Math.sin(tempo * 15));
     controles.update();
@@ -1501,6 +1508,9 @@
   }
 
   /* ------------------------------ INICIAR ------------------------------- */
+  /* fisiologia em ação: impulsos nervosos, drogas por substância e hormônios (js/fisiologia.js) */
+  const FISIOL = FISIO.criar({ T, cena, camera, palco, pecas, refs, est, realcar, limparRealce, voarPara, aplicarPreset, aplicarTudo, garantirVisivel, definirSexo, aplicarFlexao, desselecionar,
+    atuBpm: () => atuBpmExt && atuBpmExt(), fogo: v => { fogo.visible = v; } });
   montarSimulacoes(); montarBNCC(); montarQuiz(); montarDesafio(); montarSaibaMais();
   aplicarPreset("tudo"); definirSexo("feminino"); aplicarCorte();
   mostrarBoasVindas();
@@ -1519,7 +1529,7 @@
       aplicarTudo(); mostrarSistema(id);
     });
   }
-  window.APP = { mov: MOV, aplicarPreset, selecionar, garantirVisivel, trocarAba, voarPara, est, falar, info: (id, daLupa) => mostrarInfo(id, null, daLupa) };
+  window.APP = { corpo, fis: FISIOL, mov: MOV, aplicarPreset, selecionar, garantirVisivel, trocarAba, voarPara, est, falar, info: (id, daLupa) => mostrarInfo(id, null, daLupa) };
   if (window.LUPA) { LUPA.iniciar({ pecas, info: (id, daLupa) => mostrarInfo(id, null, daLupa) }); $("#btnLupa").onclick = () => LUPA.abrir("olho"); }
   redimensionar();
   laco();
