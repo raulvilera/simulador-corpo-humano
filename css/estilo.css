@@ -420,3 +420,11 @@ hr { border: 0; border-top: 1px solid var(--borda-suave); margin: 16px 0; }
 .gland:hover { border-color: var(--acento); }
 .gland span { font-size: .78rem; color: var(--acento); font-weight: 700; }
 .gland small { font-size: .8rem; color: var(--muted); line-height: 1.35; }
+
+/* percorrer o corpo de baixo para cima */
+.percorrer { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px; border-radius: 999px; background: rgba(6, 24, 26, .62); border: 1px solid var(--borda); backdrop-filter: blur(6px); }
+.percorrer button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--borda); background: var(--card); color: var(--txt); font-size: .8rem; cursor: pointer; touch-action: none; }
+.percorrer button:hover { background: var(--card2); color: var(--acento); }
+.percorrer .perc-rot { font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.percorrer input[type=range] { writing-mode: vertical-lr; direction: rtl; width: 22px; height: min(46vh, 300px); accent-color: var(--acento); cursor: ns-resize; margin: 0; }
+@media (max-width: 760px) { .percorrer { right: 6px; padding: 6px 4px; } .percorrer input[type=range] { height: 30vh; } .percorrer .perc-rot { display: none; } }
