@@ -325,7 +325,7 @@
     const div = document.createElement("div"); div.id = "lupa"; div.hidden = true;
     div.innerHTML = `
       <div class="lupa-topo">
-        <b class="lupa-titulo">🔬 Lupa dos sentidos</b>
+        <b class="lupa-titulo">🔬 Lupa: órgãos em detalhe</b>
         <div class="lupa-abas">${Object.entries(ORGAOS).map(([k, o]) => `<button data-lupa="${k}">${o.icone} ${o.nome}</button>`).join("")}</div>
         <div class="lupa-acoes">
           <button id="lupaListaBtn" title="Mostrar ou ocultar a lista de estruturas">☰ Lista</button>
@@ -411,14 +411,14 @@
       let geo = p.geometry.clone(); geo.applyMatrix4(p.matrixWorld);
       if (filtro) { // mantém só triângulos que passam no filtro (ex.: lado direito)
         const pos = geo.attributes.position, I = geo.index.array, ni = [];
-        for (let t = 0; t < I.length; t += 3) { const cx = (pos.getX(I[t]) + pos.getX(I[t + 1]) + pos.getX(I[t + 2])) / 3; if (filtro(cx)) ni.push(I[t], I[t + 1], I[t + 2]); }
+        for (let t = 0; t < I.length; t += 3) { const cx = (pos.getX(I[t]) + pos.getX(I[t + 1]) + pos.getX(I[t + 2])) / 3; if (filtro(cx, (pos.getY(I[t]) + pos.getY(I[t + 1]) + pos.getY(I[t + 2])) / 3, (pos.getZ(I[t]) + pos.getZ(I[t + 1]) + pos.getZ(I[t + 2])) / 3)) ni.push(I[t], I[t + 1], I[t + 2]); }
         // descarta os vértices não usados (ex.: os da outra orelha), para que caixa
         // envolvente, enquadramento e setas considerem só a parte mantida
         const mapa = new Map(), np = [], nn = [], nor = geo.attributes.normal;
         const idx = ni.map(i => { let j = mapa.get(i); if (j === undefined) { j = mapa.size; mapa.set(i, j); np.push(pos.getX(i), pos.getY(i), pos.getZ(i)); if (nor) nn.push(nor.getX(i), nor.getY(i), nor.getZ(i)); } return j; });
         geo = new T.BufferGeometry(); geo.setAttribute("position", new T.Float32BufferAttribute(np, 3)); if (nor) geo.setAttribute("normal", new T.Float32BufferAttribute(nn, 3)); geo.setIndex(idx);
       }
-      res.push({ id: p.userData.id, geo, key: p.material.userData.chave || p.userData.id });
+      res.push({ id: p.userData.id, geo, key: String(p.material.userData.chave || p.userData.id).split(":").pop() });
     });
     return res;
   }
@@ -459,12 +459,15 @@
       raiz.add(construirPapilas(M, ling));
       cam = [V(2.5, 7, 8), V(1.8, 0, 0)];
       demo = demoLingua(raiz);
+    } else if (EXTRAS[org]) {   // órgãos acrescentados por outros arquivos (js/lupa2.js)
+      const r = await EXTRAS[org]({ T, V, M, marca, tubo, esfera, clonarDoCorpo, PAL, ctx });
+      raiz.add(r.raiz); cam = r.cam || cam; corte = !!r.corte; demo = r.demo || "";
     } else if (org === "pele") {
       const p = construirPele(M); raiz.add(p); raiz.userData.pele = p;
       cam = [V(8, 6.5, 12), V(0, 0, 0)]; corte = false;
       demo = demoPele(p);
     }
-    reg(raiz);
+    // (as malhas são registradas em abrir(), depois do carregamento)
     return { raiz, cam, corte, demo };
   }
 
@@ -474,7 +477,7 @@
 
   async function abrir(org, parte) {
     if (!ctx) criarContexto();
-    ctx.div.hidden = false;
+    ctx.div.hidden = false; document.body.classList.add("lupa-aberta");
     if (!ctx.listaDefinida) { ctx.listaDefinida = true; ctx.div._lista(ctx.div.clientWidth >= 900); }   // em telas estreitas a lista começa recolhida: mais espaço para o modelo
     redim();
     ctx.div.querySelectorAll("[data-lupa]").forEach(b => b.classList.toggle("ativo", b.dataset.lupa === org));
@@ -482,7 +485,9 @@
       if (ctx.raiz) { ctx.cena.remove(ctx.raiz); }
       ctx.malhas = []; ctx.anim = null; ctx.org = org; ctx.sel = null;
       document.getElementById("lupaCarga").hidden = false; document.getElementById("lupaDemo").innerHTML = "";
+      const vez = ctx.vez = (ctx.vez || 0) + 1;   // se outro órgão for escolhido durante o carregamento, só o último vale
       if (!ctx.cache[org]) ctx.cache[org] = await montar(org);
+      if (vez !== ctx.vez) return;
       const k = ctx.cache[org];
       ctx.malhas = []; k.raiz.traverse(o => { if (o.isMesh && o.userData.id) ctx.malhas.push(o); });
       ctx.raiz = k.raiz; ctx.cena.add(k.raiz);
@@ -493,13 +498,14 @@
       ctx.anim = k.demo ? k.demo.passo : null;
       montarRotulos();
     }
-    selecionar(parte || org, true);
+    selecionar(parte || org, true, !parte);   // ao abrir, mostra a ficha sem realçar (as cores do modelo ficam visíveis)
   }
-  function fechar() { if (ctx) ctx.div.hidden = true; }
+  function fechar() { if (ctx) ctx.div.hidden = true; document.body.classList.remove("lupa-aberta"); }
 
   function partesDe(org) {
     const D = window.DADOS.estruturas; const ids = new Set(ctx.malhas.map(m => m.userData.id));
-    return Object.keys(D).filter(k => ids.has(k) && (D[k].orgao === org || k === org || (org === "pele" && D[k].orgao === "pele")));
+    const inc = (ORGAOS[org] && ORGAOS[org].inclui) || [];
+    return Object.keys(D).filter(k => ids.has(k) && (D[k].orgao === org || k === org || inc.includes(k) || (org === "pele" && D[k].orgao === "pele")));
   }
   function montarLista(org) {
     const D = window.DADOS.estruturas; const lista = document.getElementById("lupaLista");
@@ -552,10 +558,10 @@
     ctx.setas.atualizar(pts, w, h);
   }
   function realce(id, cor) { ctx.malhas.forEach(m => { if (m.userData.id === id && m.material.emissive) { m.material.emissive.setHex(cor); m.material.emissiveIntensity = 0.45; } }); }
-  function selecionar(id, deLista) {
+  function selecionar(id, deLista, semRealce) {
     const D = window.DADOS.estruturas;
     if (ctx.sel) realce(ctx.sel, 0);
-    ctx.sel = id; if (ctx.malhas.some(m => m.userData.id === id)) realce(id, 0xffaa22);
+    ctx.sel = id; if (!semRealce && ctx.malhas.some(m => m.userData.id === id)) realce(id, 0xffaa22);
     ctx.div.querySelectorAll("[data-sel]").forEach(b => b.classList.toggle("ativo", b.dataset.sel === id));
     if (ctx.setas) ctx.setas.marcar(id);
     if (D[id] && APPREF && APPREF.info) APPREF.info(id, true);
@@ -718,5 +724,8 @@
     };
   }
 
-  window.LUPA = { iniciar, abrir, fechar, ORGAOS };
+  // outros arquivos podem acrescentar órgãos à lupa: registrar("coracao", { nome, icone, inclui: [ids], montar: async H => ({ raiz, cam, corte, demo }) })
+  const EXTRAS = {};
+  function registrar(org, def) { ORGAOS[org] = { nome: def.nome, icone: def.icone, inclui: def.inclui || [] }; EXTRAS[org] = def.montar; }
+  window.LUPA = { iniciar, abrir, fechar, ORGAOS, registrar };
 })();

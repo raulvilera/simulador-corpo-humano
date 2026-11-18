@@ -62,7 +62,7 @@ window.construirCorpo = async function (aoProgresso) {
       if (op.sheenColor !== undefined) op.sheenColor = new T.Color(op.sheenColor);
       const m = new T.MeshPhysicalMaterial(op);
       m.envMapIntensity = 0.75;
-      m.userData.corBase = new T.Color(cor);
+      m.userData.corBase = new T.Color(cor); m.userData.chave = mat || id;
       mats[chave] = m;
       if (!mats[id]) mats[id] = m;
     }
