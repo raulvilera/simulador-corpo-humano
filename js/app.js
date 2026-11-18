@@ -227,27 +227,39 @@
     const v = VISTAS[nome]; est.vistaInteira = null; voarPara(new T.Vector3(...v[0]), new T.Vector3(...v[1]));
   }));
   controles.addEventListener("start", () => { est.vistaInteira = null; });
-  /* percorrer o corpo na vertical: sobe ou desce a câmera e o ponto de mira juntos, sem mudar o ângulo (o corpo continua em pé) */
-  const ALT_MIN = 0, ALT_MAX = 17.6, inAlt = $("#altura");
+  /* mouse: botão ESQUERDO segurado e arrastado para cima/baixo percorre o corpo na vertical (câmera e ponto de mira
+     sobem ou descem juntos — o corpo continua em pé, no mesmo lugar); para os lados, gira o corpo em volta dele.
+     O botão direito faz a rotação livre (inclinar para ver de cima ou de baixo). Shift + roda e setas ↑↓ também sobem e descem. */
+  const ALT_MIN = 0, ALT_MAX = 17.6;
+  controles.mouseButtons.LEFT = null; controles.mouseButtons.RIGHT = T.MOUSE.ROTATE;   // sem "pan" livre (que empurrava o manequim na diagonal)
   function moverAltura(y) {
     y = Math.min(ALT_MAX, Math.max(ALT_MIN, y)); const dy = y - controles.target.y; if (!dy) return;
     anim = null; controles.target.y += dy; camera.position.y += dy; est.vistaInteira = null; controles.update();
   }
-  let altArrastando = false, subindo = null;
-  inAlt.addEventListener("input", () => { altArrastando = true; moverAltura(+inAlt.value); });
-  inAlt.addEventListener("change", () => { altArrastando = false; });
-  function segurar(btn, passo) {   // clique = um passo; segurado = movimento contínuo
-    const parar = () => { clearInterval(subindo); subindo = null; };
-    btn.addEventListener("pointerdown", e => { e.preventDefault(); moverAltura(controles.target.y + passo); parar(); subindo = setInterval(() => moverAltura(controles.target.y + passo / 4), 40); });
-    ["pointerup", "pointerleave", "pointercancel"].forEach(t => btn.addEventListener(t, parar));
+  {
+    const el = renderer.domElement; let arr = null;
+    const eixoY = new T.Vector3(0, 1, 0), off = new T.Vector3();
+    el.addEventListener("pointerdown", e => { if (e.button !== 0 || e.pointerType !== "mouse") return; arr = { id: e.pointerId, x: e.clientX, y: e.clientY }; el.setPointerCapture(e.pointerId); });
+    el.addEventListener("pointermove", e => {
+      if (!arr || e.pointerId !== arr.id) return;
+      const dx = e.clientX - arr.x, dy = e.clientY - arr.y; arr.x = e.clientX; arr.y = e.clientY;
+      if (dx || dy) { anim = null; est.vistaInteira = null; }
+      if (dy) {   // para cima/baixo: o corpo acompanha o cursor, como se fosse "puxado"
+        const dist = camera.position.distanceTo(controles.target), porPx = 2 * dist * Math.tan(T.MathUtils.degToRad(camera.fov / 2)) / Math.max(1, el.clientHeight);
+        moverAltura(controles.target.y + dy * porPx);
+      }
+      if (dx) { off.copy(camera.position).sub(controles.target).applyAxisAngle(eixoY, -2 * Math.PI * dx / Math.max(1, el.clientHeight)); camera.position.copy(controles.target).add(off); controles.update(); }
+    });
+    const soltar = e => { if (arr && e.pointerId === arr.id) { arr = null; el.style.cursor = ""; } };
+    el.addEventListener("pointerup", soltar); el.addEventListener("pointercancel", soltar);
+    el.addEventListener("contextmenu", e => e.preventDefault());
+    el.addEventListener("wheel", e => { if (!e.shiftKey) return; e.preventDefault(); e.stopImmediatePropagation(); const d = e.deltaY || e.deltaX; moverAltura(controles.target.y - Math.sign(d) * 0.6); }, { capture: true, passive: false });
+    document.addEventListener("keydown", e => {
+      if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+      if (e.key === "ArrowUp" || e.key === "PageUp") { e.preventDefault(); moverAltura(controles.target.y + 0.6); }
+      else if (e.key === "ArrowDown" || e.key === "PageDown") { e.preventDefault(); moverAltura(controles.target.y - 0.6); }
+    });
   }
-  segurar($("#btnSubir"), 0.8); segurar($("#btnDescer"), -0.8);
-  renderer.domElement.addEventListener("wheel", e => { if (!e.shiftKey) return; e.preventDefault(); e.stopImmediatePropagation(); const d = e.deltaY || e.deltaX; moverAltura(controles.target.y - Math.sign(d) * 0.6); }, { capture: true, passive: false });
-  document.addEventListener("keydown", e => {
-    if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
-    if (e.key === "ArrowUp" || e.key === "PageUp") { e.preventDefault(); moverAltura(controles.target.y + 0.6); }
-    else if (e.key === "ArrowDown" || e.key === "PageDown") { e.preventDefault(); moverAltura(controles.target.y - 0.6); }
-  });
   $("#btnGirar").addEventListener("click", e => { est.girar = !est.girar; e.currentTarget.classList.toggle("ativo", est.girar); });
   $("#btnFoto").addEventListener("click", () => {
     renderer.render(cena, camera);
@@ -1453,7 +1465,6 @@
       controles.target.lerpVectors(anim.a0, anim.a1, k); camera.position.lerpVectors(anim.p0, anim.p1, k);
       if (anim.t >= 1) anim = null;
     }
-    if (!altArrastando) { const v = Math.min(ALT_MAX, Math.max(ALT_MIN, controles.target.y)); if (Math.abs(+inAlt.value - v) > 0.02) inAlt.value = v; }
     if (est.girar) corpo.raiz.rotation.y += dt * 0.35, grupoImp.rotation.y = corpo.raiz.rotation.y;
     // coração: sístole/diástole
     faseCor += dt * est.bpm / 60;

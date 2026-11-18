@@ -1,6 +1,6 @@
 /* Service worker do Corpo Humano 3D: permite instalar o app e usá-lo offline.
    Ao publicar mudanças grandes, aumente VERSAO para limpar o cache antigo. */
-const VERSAO = "v3";
+const VERSAO = "v4";
 const CACHE = "corpo-humano-" + VERSAO;
 
 // Arquivos essenciais guardados já na instalação (o restante é guardado conforme é usado).
