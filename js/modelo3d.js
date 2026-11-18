@@ -165,6 +165,30 @@ window.construirCorpo = async function (aoProgresso) {
   };
   const MUSCULOS_NO_OSSO = new Set(["fibulares", "levantador_escapula", "subescapular"]);
 
+  /* ------------- CORPO FEMININO ATLÉTICO -------------
+     O modelo de pele feminino original tem abdome bem saliente e cintura larga. Aqui o tronco é remodelado
+     (só a pele): o abdome fica plano, a cintura mais fina e a lombar e os glúteos mais firmes, como num corpo
+     de quem pratica atividade física. Fatores por altura (y): kf = frente, kb = costas, kx = largura; zc = eixo do tronco. */
+  function corpoAtletico(geo) {
+    const Y = [8.0, 8.4, 8.8, 9.2, 9.6, 10.0, 10.4, 10.8, 11.2, 11.6, 12.0, 12.4, 12.7];
+    const KF = [1, 0.99, 0.95, 0.82, 0.74, 0.7, 0.68, 0.7, 0.75, 0.82, 0.92, 0.98, 1];
+    const KB = [1, 0.97, 0.93, 0.92, 0.92, 0.9, 0.9, 0.9, 0.9, 0.93, 0.97, 0.99, 1];
+    const KX = [1, 1, 0.97, 0.95, 0.94, 0.92, 0.9, 0.9, 0.92, 0.95, 0.98, 1, 1];
+    const ZC = [-0.35, -0.3, -0.21, -0.045, 0.07, 0.155, 0.195, 0.185, 0.135, 0.055, 0.01, -0.035, -0.06];
+    const interp = (tab, y) => { if (y <= Y[0]) return tab[0]; if (y >= Y[Y.length - 1]) return tab[tab.length - 1]; let i = 0; while (Y[i + 1] < y) i++; const t = (y - Y[i]) / (Y[i + 1] - Y[i]); return tab[i] + (tab[i + 1] - tab[i]) * t; };
+    const suave = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+    // limite lateral do tronco: largo nos quadris, estreito na cintura; os braços ficam de fora
+    const lim = y => y < 9.4 ? 1.75 : y > 10.2 ? 1.3 : 1.75 - (y - 9.4) / 0.8 * 0.45;
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i); if (y < Y[0] || y > Y[Y.length - 1]) continue;
+      const x = p.getX(i), L = lim(y), m = 1 - suave(L - 0.35, L, Math.abs(x)); if (m <= 0) continue;
+      const zc = interp(ZC, y), z = p.getZ(i), k = z > zc ? interp(KF, y) : interp(KB, y), kx = interp(KX, y);
+      p.setZ(i, z + ((zc + (z - zc) * k) - z) * m); p.setX(i, x + (x * kx - x) * m);
+    }
+    p.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
+  }
+
   /* ------------------------ ORGANIZAÇÃO NA CENA ---------------------------- */
   const subgrupos = { fem: [], masc: [] };
   function sub(sist, grupo) {
@@ -197,6 +221,7 @@ window.construirCorpo = async function (aoProgresso) {
     const dados = await descomprimir(pacote.dados);
     for (const c of pacote.cab) {
       const geo = geometria(c, dados), nomear = sist === "esqueletico" && OSSOS[c.id + ":" + c.mat];
+      if (c.id === "pele" && c.grupo === "fem" && !c.piv) corpoAtletico(geo);
       for (const [id, g] of nomear ? dividir(geo, nomear) : [[c.id, geo]]) {
       const musc = MUSCULOS_NO_OSSO.has(id), sis = musc ? "muscular" : sist;
       const mesh = new T.Mesh(g, material(id, musc ? "musculo" : c.mat));
