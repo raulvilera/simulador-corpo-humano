@@ -265,7 +265,18 @@
     renderer.render(cena, camera);
     const a = el("a", { href: renderer.domElement.toDataURL("image/png"), download: "corpo-humano-3d.png" }); a.click();
   });
-  $("#btnTela").addEventListener("click", () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else document.exitFullscreen(); });
+  /* tela cheia: só o corpo inteiro; os sistemas ficam num menu (☰) que abre por cima, com fundo transparente */
+  function modoFoco(lig) {
+    const b = document.body; if (b.classList.contains("foco") === lig) return;
+    b.classList.toggle("foco", lig); b.classList.remove("sis-aberto", "painel-aberto"); $("#btnFocoMenu").setAttribute("aria-expanded", "false");
+    if (lig) { if (!document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => { }); }
+    else if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
+    requestAnimationFrame(() => { redimensionar(); verCorpoInteiro(est.vistaInteira || "frente", 0.6); });
+  }
+  $("#btnTela").addEventListener("click", () => modoFoco(!document.body.classList.contains("foco")));
+  $("#btnFocoSair").addEventListener("click", () => modoFoco(false));
+  $("#btnFocoMenu").addEventListener("click", e => { const ab = document.body.classList.toggle("sis-aberto"); e.currentTarget.setAttribute("aria-expanded", ab); });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("foco")) modoFoco(false); });
 
   // uma malha "pertence" a um id se for a própria estrutura ou parte do órgão (ex.: córnea → olho)
   const pertence = (m, id) => m.userData.id === id || (D.estruturas[m.userData.id] && D.estruturas[m.userData.id].orgao === id);
