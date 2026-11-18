@@ -1530,7 +1530,7 @@
     });
   }
   window.APP = { corpo, fis: FISIOL, mov: MOV, aplicarPreset, selecionar, garantirVisivel, trocarAba, voarPara, est, falar, info: (id, daLupa) => mostrarInfo(id, null, daLupa) };
-  if (window.LUPA) { LUPA.iniciar({ pecas, info: (id, daLupa) => mostrarInfo(id, null, daLupa) }); $("#btnLupa").onclick = () => LUPA.abrir("olho"); }
+  if (window.LUPA) { LUPA.iniciar({ pecas, info: (id, daLupa) => mostrarInfo(id, null, daLupa) }); $("#btnLupa").onclick = () => LUPA.abrir("olho"); $("#btnFocoLupa").onclick = () => LUPA.abrir("olho"); }
   redimensionar();
   laco();
   setTimeout(() => $("#carregando").classList.add("some"), 300);

@@ -462,3 +462,8 @@ body.foco .lateral section:has(#corteTipo) { order: -1; }   /* em tela cheia, o 
 .det-subst p { margin: .35em 0; }
 .fis-etiquetas { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .fis-et { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: .74rem; font-weight: 600; color: var(--rot-txt); background: var(--rot-bg); border: 1px solid var(--c, #fff); border-radius: 6px; padding: 2px 7px; margin: -26px 0 0 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+
+/* lupa em tela cheia: botão 🔬 ao lado do ☰; com a lupa aberta, os botões flutuantes saem do caminho */
+#btnFocoLupa { left: 70px; font-size: 1.25rem; }
+body.foco.lupa-aberta .foco-btn { display: none; }
+body.foco #lupa { position: fixed; z-index: 34; }
