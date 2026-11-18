@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/estilo.css?v=17">
+  <link rel="stylesheet" href="css/estilo.css?v=18">
 </head>
 <body class="painel-aberto">
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -139,15 +139,8 @@
       <div class="palco-area">
         <div id="palco"></div>
         <div id="rotulos"></div>
-        <div class="percorrer" role="group" aria-label="Percorrer o corpo de baixo para cima">
-          <button id="btnSubir" type="button" title="Subir (seta ↑)" aria-label="Subir">▲</button>
-          <span class="perc-rot">Cabeça</span>
-          <input id="altura" type="range" min="0" max="17.6" step="0.05" value="9.2" aria-label="Altura da visão: dos pés à cabeça" title="Arraste para percorrer o corpo (ou use Shift + roda do mouse)">
-          <span class="perc-rot">Pés</span>
-          <button id="btnDescer" type="button" title="Descer (seta ↓)" aria-label="Descer">▼</button>
-        </div>
       </div>
-      <div class="ajuda-gestos">Arraste para girar · roda para aproximar · ▲▼, Shift + roda ou setas ↑↓ para percorrer o corpo de baixo para cima · clique numa estrutura para abrir a ficha</div>
+      <div class="ajuda-gestos">Arraste para os lados para girar · roda para aproximar · arraste para cima ou para baixo para percorrer o corpo · botão direito inclina a visão · clique numa estrutura para abrir a ficha</div>
       <div id="dica" hidden></div>
       <div id="aviso" hidden></div>
     </section>
@@ -196,7 +189,7 @@
   <script src="js/movimento.js?v=4"></script>
   <script src="js/drogas.js?v=13"></script>
   <script src="js/simulacoes2d.js?v=9"></script>
-  <script src="js/app.js?v=18"></script>
+  <script src="js/app.js?v=19"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () { }); });
