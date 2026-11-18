@@ -681,6 +681,63 @@ window.construirCorpo = async function (aoProgresso) {
   refs.gonadasF = mats.ovarios; refs.gonadasM = mats.testiculos;
   refs.fem.visible = true; refs.masc.visible = false;
 
+  /* --------- terminações nervosas: as pontas livres dos nervos afinam e se abrem em ramúsculos ---------
+     (antes os tubos terminavam "cortados", como se o nervo estivesse incompleto). Uma ponta é livre quando não
+     continua em outro nervo e não entra no encéfalo, no tronco encefálico, na medula ou num gânglio. */
+  (function () {
+    raiz.updateMatrixWorld(true);
+    const tubos = pecas.filter(m => m.userData.sistema === "nervoso" && m.userData.curva && m.geometry.type === "TubeGeometry");
+    const W = (m, p) => m.parent.localToWorld(p.clone());
+    const amostras = tubos.map(m => { const a = []; for (let i = 0; i <= 24; i++) a.push(W(m, m.userData.curva.getPointAt(i / 24))); return a; });
+    const SNC = new Set(["cerebro", "tronco_encefalico", "cerebelo", "medula"]);
+    const caixas = pecas.filter(m => m.userData.sistema === "nervoso" && (SNC.has(m.userData.id) || m.geometry.type === "SphereGeometry")).map(m => new T.Box3().setFromObject(m).expandByScalar(0.03));
+    function livre(k, P, r) {
+      const lim = Math.max(0.035, r * 2.5);
+      for (let j = 0; j < tubos.length; j++) { if (j === k) continue; for (const q of amostras[j]) if (q.distanceTo(P) < lim) return false; }
+      return !caixas.some(c => c.containsPoint(P));
+    }
+    // afina a ponta do tubo (t = 0 ou t = 1) movendo os anéis para o eixo
+    function afinar(geo, curva, ponta, ate) {
+      const prm = geo.parameters, nT = prm.tubularSegments, nR = prm.radialSegments, pos = geo.attributes.position, c = new T.Vector3(), v = new T.Vector3();
+      for (let i = 0; i <= nT; i++) {
+        const t = i / nT, d = ponta === 1 ? t - 0.78 : 0.22 - t; if (d <= 0) continue;
+        const f = 1 - (1 - ate) * Math.min(1, d / 0.22); curva.getPointAt(t, c);
+        for (let j = 0; j <= nR; j++) { const k = i * (nR + 1) + j; v.fromBufferAttribute(pos, k).sub(c).multiplyScalar(f).add(c); pos.setXYZ(k, v.x, v.y, v.z); }
+      }
+      pos.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere(); geo.computeBoundingBox();
+    }
+    function juntar(geos) {   // junta várias TubeGeometry numa só (menos objetos para desenhar)
+      const P = [], N = [], U = [], I = []; let base = 0;
+      geos.forEach(g => { P.push(...g.attributes.position.array); N.push(...g.attributes.normal.array); U.push(...g.attributes.uv.array); g.index.array.forEach(x => I.push(x + base)); base += g.attributes.position.count; g.dispose(); });
+      const r = new T.BufferGeometry(); r.setAttribute("position", new T.Float32BufferAttribute(P, 3)); r.setAttribute("normal", new T.Float32BufferAttribute(N, 3)); r.setAttribute("uv", new T.Float32BufferAttribute(U, 2)); r.setIndex(I);
+      r.computeBoundingSphere(); r.computeBoundingBox(); return r;
+    }
+    const ramos = new Map(), eixo = new T.Vector3(), up = new T.Vector3();
+    tubos.forEach((m, k) => {
+      const c = m.userData.curva, r = m.geometry.parameters.radius;
+      [0, 1].forEach(ponta => {
+        const P = c.getPointAt(ponta), Pw = W(m, P);
+        if (!livre(k, Pw, r)) return;
+        afinar(m.geometry, c, ponta, 0.45);
+        // ramúsculos: 3 fios finos que se abrem a partir da ponta, na direção em que o nervo seguia
+        const D = c.getTangentAt(ponta).normalize(); if (ponta === 0) D.negate();
+        up.set(0, 1, 0); if (Math.abs(D.dot(up)) > 0.9) up.set(1, 0, 0);
+        eixo.crossVectors(D, up).normalize(); const eixo2 = new T.Vector3().crossVectors(D, eixo).normalize();
+        const L = Math.min(0.3, Math.max(0.12, r * 10)), rr = Math.max(0.003, r * 0.38);
+        const chave = m.parent.uuid + "|" + m.userData.id; if (!ramos.has(chave)) ramos.set(chave, { pai: m.parent, id: m.userData.id, mat: m.material, geos: [] });
+        // ângulos pequenos e trajetos levemente curvos, como as fibras que se espalham no músculo ou na pele
+        [[eixo, 0.32, 1], [eixo, -0.28, 0.85], [eixo2, 0.24, 0.75], [eixo2, -0.2, 0.65]].forEach(([ax, ang, comp]) => {
+          const d = D.clone().applyAxisAngle(ax, ang), Lc = L * comp;
+          const p1 = P.clone().addScaledVector(D, Lc * 0.35).addScaledVector(d, Lc * 0.05), p2 = P.clone().addScaledVector(d, Lc * 0.7), fim = P.clone().addScaledVector(d.clone().applyAxisAngle(ax, ang * 0.4), Lc);
+          const cv = new T.CatmullRomCurve3([P.clone().addScaledVector(D, -r * 0.5), p1, p2, fim]);
+          const g = new T.TubeGeometry(cv, 12, rr, 6, false); afinar(g, cv, 1, 0.12); ramos.get(chave).geos.push(g);
+        });
+      });
+    });
+    let nPontas = 0; ramos.forEach(({ pai, id, mat, geos }) => { nPontas += geos.length / 4; const m = new T.Mesh(juntar(geos), mat); registrar(m, id, "nervoso"); pai.add(m); });
+    window.__terminacoes = { tubos: tubos.length, pontas: nPontas, malhas: ramos.size };
+  })();
+
   pecas.forEach(m => { m.castShadow = false; m.receiveShadow = false; });
   progresso(1, "Pronto");
   return { raiz, grupos, pecas, mats, refs };
