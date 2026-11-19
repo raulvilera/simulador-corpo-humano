@@ -286,6 +286,17 @@ window.construirCorpo = async function (aoProgresso) {
   }
   // Medula espinal: linha central da malha real
   const medMalhas = pecas.filter(m => m.userData.id === "medula");
+  // A malha original da medula termina à frente do tronco encefálico, sem encostar nele.
+  // Aqui o trecho cervical é curvado para trás, para a medula continuar o bulbo (passando pelo forame magno).
+  medMalhas.forEach(m => {
+    const p = m.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i); if (y <= 14.45) continue;
+      const u = Math.min(1, (y - 14.45) / 1.0), k = u * u * (3 - 2 * u);
+      p.setZ(i, p.getZ(i) - 0.34 * k);
+    }
+    p.needsUpdate = true; m.geometry.computeVertexNormals(); m.geometry.computeBoundingBox(); m.geometry.computeBoundingSphere();
+  });
   const ptsMed = (() => {
     const b = [], cx = new T.Box3(); medMalhas.forEach(m => cx.expandByObject(m));
     const n = 16, s = Array.from({ length: n }, () => [0, 0, 0, 0]); const v = V(0, 0, 0);
@@ -621,9 +632,9 @@ window.construirCorpo = async function (aoProgresso) {
       /* ---- tronco ---- */
       for (let n = 2; n <= 12; n++) if (![3, 5, 7, 9].includes(n)) tubo(intercostalPts(n, L), 0.016, "nervos_intercostais", "nervoso", "nervo");
       // frênico (C3–C5): desce pelo pescoço e pelo tórax, ao lado do coração, até o diafragma
-      nv("nervo_frenico", 0.018, [[0.3, 15.05, 0.05], [0.35, 14.5, 0.12], [0.4, 14.0, 0.15], [0.62, 13.5, 0.2], [0.82, 13.0, 0.25], [0.85, 12.5, 0.28], [0.7, 12.05, 0.3]]);
+      nv("nervo_frenico", 0.018, [[0.06, 14.95, -0.3], [0.24, 14.9, -0.12], [0.33, 14.6, 0.08], [0.35, 14.5, 0.12], [0.4, 14.0, 0.15], [0.62, 13.5, 0.2], [0.82, 13.0, 0.25], [0.85, 12.5, 0.28], [0.7, 12.05, 0.3]]);
       // vago (X par craniano): do tronco encefálico ao pescoço, tórax (junto ao esôfago) e estômago
-      const vago = [[0.14, 15.6, -0.22], [0.3, 15.3, -0.05], [0.33, 14.8, 0.02], [0.3, 14.2, 0], [0.22, 13.7, -0.1], [0.2, 13.0, -0.25], [0.15, 12.3, -0.25]].map(p => [p[0] * s, p[1], p[2]]);
+      const vago = [[0.08, 15.56, -0.38], [0.2, 15.45, -0.22], [0.3, 15.3, -0.05], [0.33, 14.8, 0.02], [0.3, 14.2, 0], [0.22, 13.7, -0.1], [0.2, 13.0, -0.25], [0.15, 12.3, -0.25]].map(p => [p[0] * s, p[1], p[2]]);
       tubo(vago.concat(s > 0 ? [[0.2, 11.95, -0.05], [0.45, 11.8, 0.3], [0.7, 11.6, 0.5]] : [[0.02, 11.98, -0.25], [0.2, 11.75, -0.12], [0.4, 11.6, -0.05]]), 0.026, "nervo_vago", "nervoso", "nervo");
       // facial (VII par craniano): sai à frente da orelha e abre-se em leque sobre o rosto
       const fac = [0.68, 15.75, 0.08];
@@ -640,14 +651,14 @@ window.construirCorpo = async function (aoProgresso) {
       nv("nervo_trigemeo", 0.012, [gt, [0.32, 15.92, 0.4], [0.3, 15.85, 0.82]]);
       nv("nervo_trigemeo", 0.012, [gt, [0.36, 15.6, 0.15], [0.34, 15.3, 0.4], [0.22, 15.12, 0.66]]);
       // acessório (XI par) para o trapézio e hipoglosso (XII par) para a língua
-      nv("nervo_acessorio", 0.014, [[0.14, 15.5, -0.26], [0.36, 15.2, -0.3], [0.62, 14.85, -0.38], [0.95, 14.5, -0.45]]);
-      nv("nervo_hipoglosso", 0.012, [[0.12, 15.52, -0.18], [0.3, 15.25, 0.05], [0.24, 15.15, 0.32], [0.08, 15.22, 0.5]]);
+      nv("nervo_acessorio", 0.014, [[0.07, 15.46, -0.42], [0.2, 15.38, -0.36], [0.36, 15.2, -0.3], [0.62, 14.85, -0.38], [0.95, 14.5, -0.45]]);
+      nv("nervo_hipoglosso", 0.012, [[0.06, 15.52, -0.35], [0.16, 15.45, -0.18], [0.3, 15.25, 0.05], [0.24, 15.15, 0.32], [0.08, 15.22, 0.5]]);
       // ramos do vago para o coração e os pulmões
       nv("nervo_vago", 0.012, [[0.24, 13.8, -0.08], [0.3, 13.55, 0.1], [0.25, 13.3, 0.25]]);
       nv("nervo_vago", 0.012, [[0.2, 13.3, -0.2], [0.42, 13.2, -0.15], [0.62, 13.1, -0.1]]);
       // plexo cervical (C1–C4): occipital (couro cabeludo) e supraclaviculares (ombro)
-      nv("plexo_cervical", 0.012, [[0.2, 15.4, -0.05], [0.3, 15.55, -0.5], [0.3, 15.95, -1.0], [0.3, 16.35, -1.2]]);
-      nv("plexo_cervical", 0.012, [[0.3, 15.1, 0.1], [0.55, 14.8, 0.2], [0.85, 14.5, 0.3], [1.15, 14.3, 0.3]]);
+      nv("plexo_cervical", 0.012, [[0.06, 15.3, -0.38], [0.22, 15.4, -0.45], [0.3, 15.55, -0.55], [0.3, 15.95, -1.0], [0.3, 16.35, -1.2]]);
+      nv("plexo_cervical", 0.012, [[0.06, 15.1, -0.33], [0.25, 15.05, -0.15], [0.4, 14.95, 0.08], [0.55, 14.8, 0.2], [0.85, 14.5, 0.3], [1.15, 14.3, 0.3]]);
       /* ---- plexo lombar ---- */
       nv("nervo_femoral", 0.02, [[0.56, 8.95, 0.25], [0.75, 8.3, 0.35], [0.9, 7.5, 0.3], [0.95, 6.6, 0.25]]);                                   // ramos para o quadríceps
       nv("nervo_femoral", 0.016, [[0.66, 5.61, -0.04], [0.5, 5.0, -0.15], [0.4, 4.4, -0.25], [0.38, 3.4, -0.33], [0.4, 2.4, -0.35], [0.45, 1.5, -0.33], [0.52, 0.8, -0.2]]);   // nervo safeno
