@@ -483,7 +483,7 @@
     ctx.div.querySelectorAll("[data-lupa]").forEach(b => b.classList.toggle("ativo", b.dataset.lupa === org));
     if (ctx.org !== org) {
       if (ctx.raiz) { ctx.cena.remove(ctx.raiz); }
-      ctx.malhas = []; ctx.anim = null; ctx.org = org; ctx.sel = null;
+      ctx.malhas = []; ctx.anim = null; ctx.org = org; ctx.sel = null; ctx.enquadreDemo = null;
       document.getElementById("lupaCarga").hidden = false; document.getElementById("lupaDemo").innerHTML = "";
       const vez = ctx.vez = (ctx.vez || 0) + 1;   // se outro órgão for escolhido durante o carregamento, só o último vale
       if (!ctx.cache[org]) ctx.cache[org] = await montar(org);
@@ -531,6 +531,7 @@
   // sem rótulos): mede o tamanho do modelo na tela e ajusta o zoom da câmera.
   function zoomRotulos(centrar) {
     if (!ctx || !ctx.raiz || !ctx.rots) return;
+    if (ctx.enquadreDemo) return ctx.enquadreDemo();   // uma demonstração (raios do olho) está controlando o enquadramento
     const w = ctx.palco.clientWidth, h = ctx.palco.clientHeight; if (!w || !h) return;
     const cam = ctx.camera; ctx.raiz.updateMatrixWorld(true);
     const pts = []; const v = V(0, 0, 0);
@@ -571,44 +572,104 @@
   function demoOlho(raiz) {
     const cx = new T.Box3().setFromObject(raiz.children.find(m => m.userData.id === "esclera") || raiz);
     const zc = cx.max.z, zr = cx.min.z + 0.12, ys = [-0.38, 0, 0.38];
+    const R = 0.62, zl = zc + 1.6, zs = zc + 5;          // raio da lente, posição da lente e da fonte de luz
     const g = new T.Group(); raiz.add(g); g.visible = false;
-    const linhas = ys.map(() => { const l = new T.Line(new T.BufferGeometry(), new T.LineBasicMaterial({ color: 0xffd23f })); g.add(l); return l; });
-    const foco = new T.Mesh(new T.SphereGeometry(0.06, 12, 8), new T.MeshBasicMaterial({ color: 0xff4d4d })); g.add(foco);
-    const lente = new T.Mesh(new T.LatheGeometry([V(0.001, -0.9, 0), V(0.18, -0.9, 0), V(0.12, 0, 0), V(0.18, 0.9, 0), V(0.001, 0.9, 0)], 32), M("oculos", "oculos"));
-    lente.rotation.x = Math.PI / 2; lente.rotation.z = Math.PI / 2; lente.position.z = zc + 2.2; lente.rotation.set(Math.PI / 2, 0, 0); g.add(lente);
+    const linhas = ys.map(() => { const l = new T.Line(new T.BufferGeometry(), new T.LineBasicMaterial({ color: 0xffd23f, depthTest: false })); l.renderOrder = 8; g.add(l); return l; });
+    // caminho que a luz faria SEM a lente (tracejado), para comparar o desvio
+    const fantasmas = ys.map(() => { const l = new T.Line(new T.BufferGeometry(), new T.LineDashedMaterial({ color: 0xb8c4d0, dashSize: 0.1, gapSize: 0.07, transparent: true, opacity: 0.85, depthTest: false })); l.renderOrder = 7; g.add(l); return l; });
+    const setas = ys.map(y => { const c = new T.Mesh(new T.ConeGeometry(0.06, 0.18, 12), new T.MeshBasicMaterial({ color: 0xffd23f })); c.rotation.x = -Math.PI / 2; c.position.set(0, y, zs - 1.2); g.add(c); return c; });
+    const foco = new T.Mesh(new T.SphereGeometry(0.07, 12, 8), new T.MeshBasicMaterial({ color: 0xff4d4d, depthTest: false })); foco.renderOrder = 9; g.add(foco);
+    const focoFant = new T.Mesh(new T.SphereGeometry(0.05, 12, 8), new T.MeshBasicMaterial({ color: 0xb8c4d0, depthTest: false })); focoFant.renderOrder = 9; g.add(focoFant);
+    // lente de óculos: disco cuja espessura varia do centro para a borda (eixo óptico = z)
+    const matLente = new T.MeshPhysicalMaterial({ color: 0x8fd3ff, roughness: 0.05, transparent: true, opacity: 0.55, clearcoat: 1, side: T.DoubleSide, depthWrite: false });
+    const lente = new T.Mesh(new T.BufferGeometry(), matLente); lente.rotation.x = Math.PI / 2; lente.position.z = zl; g.add(lente);
+    const aro = new T.Mesh(new T.TorusGeometry(R, 0.025, 8, 48), new T.MeshBasicMaterial({ color: 0x2b7fc4 })); aro.position.z = zl; g.add(aro);
+    function perfilLente(tipo) {
+      const tc = tipo > 0 ? 0.34 : 0.06, te = tipo > 0 ? 0.04 : 0.36, N = 16, pts = [];
+      const esp = r => tc + (te - tc) * (r / R) * (r / R);           // espessura no raio r
+      for (let i = 0; i <= N; i++) { const r = Math.max(0.001, R * i / N); pts.push(new T.Vector2(r, esp(r) / 2)); }
+      for (let i = N; i >= 0; i--) { const r = Math.max(0.001, R * i / N); pts.push(new T.Vector2(r, -esp(r) / 2)); }
+      return new T.LatheGeometry(pts, 48);
+    }
+    // rótulos em texto que acompanham a cena
+    function placa(larg) {
+      const cv = document.createElement("canvas"); cv.width = 640; cv.height = 170;
+      const tex = new T.CanvasTexture(cv); const sp = new T.Sprite(new T.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+      sp.renderOrder = 10; sp.scale.set(larg, larg * 170 / 640, 1); g.add(sp);
+      sp.userData.escrever = (l1, l2, cor) => {
+        const c = cv.getContext("2d"); c.clearRect(0, 0, 640, 170);
+        c.fillStyle = "rgba(10,30,40,.88)"; c.strokeStyle = cor; c.lineWidth = 8;
+        c.beginPath(); c.roundRect(6, 6, 628, 158, 26); c.fill(); c.stroke();
+        c.fillStyle = "#fff"; c.textAlign = "center"; c.textBaseline = "middle";
+        c.font = "bold 50px Nunito, sans-serif"; c.fillText(l1, 320, l2 ? 60 : 85);
+        if (l2) { c.font = "600 36px Nunito, sans-serif"; c.fillStyle = "#d6e6f0"; c.fillText(l2, 320, 122); }
+        tex.needsUpdate = true;
+      };
+      return sp;
+    }
+    const plLente = placa(2.3), plFoco = placa(2.0);
+    const ligFoco = new T.Line(new T.BufferGeometry(), new T.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); g.add(ligFoco);
     let modo = "normal";
+    const SEM = { normal: zr, miopia: zr + 0.7, hiper: zr - 0.8 };
     const MODOS = {
-      normal: { f: zr, lente: 0, txt: "<b>Visão normal:</b> córnea e lente desviam (refratam) os raios de luz, que se encontram exatamente sobre a retina. A imagem formada é nítida, menor e invertida." },
-      miopia: { f: zr + 0.7, lente: 0, txt: "<b>Miopia:</b> o olho é mais alongado (ou a córnea é muito curva). Os raios se encontram ANTES da retina e a imagem de objetos distantes fica borrada." },
-      miopia_c: { f: zr, lente: -1, txt: "<b>Miopia corrigida:</b> uma lente <b>divergente</b> (côncava) abre um pouco os raios antes de entrarem no olho, e o foco volta para a retina." },
-      hiper: { f: zr - 0.8, lente: 0, txt: "<b>Hipermetropia:</b> o olho é mais curto. Os raios se encontrariam DEPOIS da retina; a visão de perto fica borrada." },
-      hiper_c: { f: zr, lente: 1, txt: "<b>Hipermetropia corrigida:</b> uma lente <b>convergente</b> (convexa) aproxima os raios e o foco volta para a retina." }
+      normal: { f: SEM.normal, lente: 0, foco: ["Foco sobre a retina", "imagem nítida"], txt: "<b>Visão normal:</b> a córnea e a lente do olho (cristalino) desviam (refratam) os raios de luz, que se encontram exatamente sobre a retina. A imagem formada é nítida, menor e invertida." },
+      miopia: { f: SEM.miopia, lente: 0, foco: ["Foco ANTES da retina", "imagem borrada"], txt: "<b>Miopia:</b> o olho é mais alongado (ou a córnea é muito curva). Os raios se encontram ANTES da retina e a imagem de objetos distantes fica borrada." },
+      miopia_c: { f: SEM.normal, lente: -1, sem: SEM.miopia, foco: ["Foco volta à retina", "imagem nítida"], txt: "<b>Miopia corrigida com lente DIVERGENTE (côncava, −):</b> ela é <b>mais fina no centro e mais grossa nas bordas</b>. Ao atravessá-la, os raios <b>se afastam uns dos outros (divergem)</b>, por isso só se encontram mais para trás, exatamente sobre a retina. O tracejado cinza mostra onde os raios se cruzariam sem a lente: antes da retina." },
+      hiper: { f: SEM.hiper, lente: 0, foco: ["Foco DEPOIS da retina", "imagem borrada"], txt: "<b>Hipermetropia:</b> o olho é mais curto. Os raios ainda não se encontraram quando chegam à retina (o foco ficaria atrás dela); a visão de perto fica borrada." },
+      hiper_c: { f: SEM.normal, lente: 1, sem: SEM.hiper, foco: ["Foco volta à retina", "imagem nítida"], txt: "<b>Hipermetropia corrigida com lente CONVERGENTE (convexa, +):</b> ela é <b>mais grossa no centro e mais fina nas bordas</b>. Ao atravessá-la, os raios <b>se aproximam uns dos outros (convergem)</b>, por isso se encontram antes, exatamente sobre a retina. O tracejado cinza mostra que, sem a lente, eles só se encontrariam depois da retina." }
     };
+    // traça um raio: entra paralelo, (passa pela lente), chega à córnea e segue para o foco f; termina na retina
+    function caminho(y, yCornea, f, comLente) {
+      const pts = comLente ? [V(0, y, zl)] : [V(0, y, zs)];
+      if (!comLente && f.lente) pts.push(V(0, y, zl));
+      const pc = V(0, yCornea, zc - 0.05); pts.push(pc); const F = V(0, 0, f.z);
+      if (f.z > zr) { pts.push(F); const d2 = F.clone().sub(pc).normalize(); pts.push(F.clone().addScaledVector(d2, (zr - F.z) / d2.z)); }
+      else { const dir = F.clone().sub(pc).normalize(); pts.push(pc.clone().addScaledVector(dir, (zr - pc.z) / dir.z)); }
+      return pts;
+    }
     function desenhar() {
-      const m = MODOS[modo]; lente.visible = m.lente !== 0;
-      if (m.lente) { const prof = m.lente > 0 ? [V(0.001, -0.9, 0), V(0.05, -0.9, 0), V(0.22, 0, 0), V(0.05, 0.9, 0), V(0.001, 0.9, 0)] : [V(0.001, -0.9, 0), V(0.2, -0.9, 0), V(0.07, 0, 0), V(0.2, 0.9, 0), V(0.001, 0.9, 0)]; lente.geometry.dispose(); lente.geometry = new T.LatheGeometry(prof, 32); }
-      const zl = lente.position.z;
+      const m = MODOS[modo], temL = m.lente !== 0;
+      lente.visible = aro.visible = plLente.visible = temL;
+      if (temL) {
+        lente.geometry.dispose(); lente.geometry = perfilLente(m.lente);
+        aro.material.color.setHex(m.lente > 0 ? 0x2bb673 : 0x2b7fc4);
+        plLente.userData.escrever(m.lente > 0 ? "Lente CONVERGENTE (+)" : "Lente DIVERGENTE (−)", m.lente > 0 ? "convexa: aproxima os raios" : "côncava: afasta os raios", m.lente > 0 ? "#2bb673" : "#4aa3e8");
+        plLente.position.set(0, R + 0.62, zl);
+      }
       ys.forEach((y, i) => {
-        const pts = [V(0, y, zc + 5)];
-        let yc = y; if (m.lente) { pts.push(V(0, y, zl)); yc = y * (m.lente < 0 ? 1.18 : 0.8); }
-        pts.push(V(0, yc, zc - 0.05)); const F = V(0, 0, m.f);
-        const dir = F.clone().sub(pts[pts.length - 1]).normalize(); const t = (zr - pts[pts.length - 1].z) / dir.z;
-        pts.push(m.f > zr ? F : pts[pts.length - 1].clone().addScaledVector(dir, t));
-        if (m.f > zr) { const d2 = F.clone().sub(pts[pts.length - 2]).normalize(); pts.push(F.clone().addScaledVector(d2, (zr - F.z) / d2.z)); }
+        const yc = temL ? y * (m.lente < 0 ? 1.45 : 0.55) : y;
+        const pts = [V(0, y, zs), ...caminho(y, yc, { z: m.f, lente: m.lente }, temL)];
         linhas[i].geometry.setFromPoints(pts);
+        fantasmas[i].visible = temL;
+        if (temL) { fantasmas[i].geometry.setFromPoints(caminho(y, y, { z: m.sem, lente: 0 }, true)); fantasmas[i].computeLineDistances(); }
       });
-      foco.position.set(0, 0, m.f); document.getElementById("txtOlho").innerHTML = m.txt;
+      foco.position.set(0, 0, m.f);
+      focoFant.visible = temL; if (temL) focoFant.position.set(0, 0, Math.max(m.sem, zr));
+      plFoco.userData.escrever(m.foco[0], m.foco[1], m.f === zr ? "#2bb673" : "#ff4d4d");
+      plFoco.position.set(0, -1.75, Math.max(m.f, zr)); ligFoco.geometry.setFromPoints([V(0, -1.45, Math.max(m.f, zr)), V(0, -0.08, Math.max(m.f, zr))]);
+      document.getElementById("txtOlho").innerHTML = m.txt;
+    }
+    // enquadra todo o caminho da luz (da fonte até atrás da retina) e as placas de texto
+    function enquadrar() {
+      const cam = ctx.camera; cam.zoom = 1; cam.updateProjectionMatrix(); cam.updateMatrixWorld(); raiz.updateMatrixWorld(true);
+      let mx = 0.01, my = 0.01;
+      [V(0, 1.5, zs), V(0, -2.1, zs), V(0, 1.5, zr - 0.5), V(0, -2.1, zr - 0.5)].forEach(q => { const w = raiz.localToWorld(q).project(cam); mx = Math.max(mx, Math.abs(w.x)); my = Math.max(my, Math.abs(w.y)); });
+      cam.zoom = Math.min(4, Math.max(0.25, Math.min(0.92 / mx, 0.9 / my))); cam.updateProjectionMatrix();
     }
     return {
       montar(el) {
         el.innerHTML = `<div class="lupa-demo-tit">💡 Como o olho forma a imagem (EF06CI08)</div>
           <div class="chips">${[["normal", "Visão normal"], ["miopia", "Miopia"], ["miopia_c", "Miopia + lente divergente"], ["hiper", "Hipermetropia"], ["hiper_c", "Hipermetropia + lente convergente"]].map(([k, n]) => `<button class="chip" data-mo="${k}">${n}</button>`).join("")}
-          <button class="chip" data-mo="off">Ocultar raios</button></div><p id="txtOlho" class="mini-txt"></p>`;
+          <button class="chip" data-mo="off">Ocultar raios</button></div><p id="txtOlho" class="mini-txt"></p>
+          <p class="mini-txt muted">Amarelo: caminho da luz · Cinza tracejado: caminho sem a lente de correção · Ponto vermelho: onde os raios se encontram (foco).</p>`;
         el.querySelectorAll("[data-mo]").forEach(b => b.onclick = () => {
-          if (b.dataset.mo === "off") { g.visible = false; return; }
+          if (b.dataset.mo === "off") { g.visible = false; ctx.enquadreDemo = null; el.querySelectorAll("[data-mo]").forEach(x => x.classList.remove("ativo")); return; }
           modo = b.dataset.mo; g.visible = true; desenhar();
           el.querySelectorAll("[data-mo]").forEach(x => x.classList.toggle("ativo", x === b));
-          ctx.camera.position.set(6, 1.2, 1.5); ctx.controles.target.set(0, 0, 0.6);
+          raiz.updateMatrixWorld(true);
+          const alvo = raiz.localToWorld(V(0, 0, (zr + zs - 1) / 2));
+          ctx.camera.position.copy(alvo).add(V(7.5, 1.0, 0)); ctx.controles.target.copy(alvo); ctx.controles.update();
+          ctx.enquadreDemo = enquadrar; enquadrar();
         });
       },
       passo() { }
