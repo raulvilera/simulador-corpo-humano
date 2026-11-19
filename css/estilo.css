@@ -358,6 +358,21 @@ hr { border: 0; border-top: 1px solid var(--borda-suave); margin: 16px 0; }
 .lupa-carga[hidden], #lupaRotulos[hidden] { display: none; }
 .lupa-demo { flex: 0 0 auto; padding: 10px 14px; background: var(--bg2); border-top: 1px solid var(--borda-suave); max-height: 34%; overflow: auto; }
 .lupa-demo:empty { display: none; }
+/* Tela cheia da lupa */
+#lupaExpl { display: none; }
+#lupa.lupa-cheia { position: fixed; inset: 0; z-index: 60; height: 100vh; height: 100dvh; }
+#lupa.lupa-cheia #lupaExpl { display: inline-block; }
+#lupa.lupa-cheia .lupa-titulo, #lupa.lupa-cheia #lupaListaBtn, #lupa.lupa-cheia #lupaFechar { display: none; }
+#lupa.lupa-cheia .lupa-topo { flex-wrap: wrap; padding: 6px 8px; padding-top: max(6px, env(safe-area-inset-top)); gap: 4px; scrollbar-width: none; background: color-mix(in srgb, var(--bg2) 82%, transparent); }
+#lupa.lupa-cheia .lupa-topo::-webkit-scrollbar { display: none; }
+#lupa.lupa-cheia .lupa-abas, #lupa.lupa-cheia .lupa-acoes { flex-wrap: nowrap; margin-left: 0; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+#lupa.lupa-cheia .lupa-abas::-webkit-scrollbar, #lupa.lupa-cheia .lupa-acoes::-webkit-scrollbar { display: none; }
+#lupa.lupa-cheia #lupaCheia { background: #d64545; border-color: #d64545; color: #fff; }
+#lupa.lupa-cheia .lupa-topo button { white-space: nowrap; padding: 5px 10px; flex: none; }
+#lupa.lupa-cheia .lupa-corpo { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+#lupa.lupa-cheia .lupa-lista { display: none; }
+#lupa.lupa-cheia .lupa-demo { max-height: 34%; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+#lupa.lupa-cheia.demo-oculta .lupa-demo { display: none; }
 .lupa-demo-tit { font-family: var(--titulo); font-weight: 700; margin-bottom: 6px; }
 .destaque-btn { border-color: var(--acento); color: var(--acento); }
 @media (max-width: 760px) { .lupa-corpo { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .lupa-lista { order: 2; max-height: 130px; border-right: 0; border-top: 1px solid var(--borda-suave); } .lupa-acoes { margin-left: 0; } }

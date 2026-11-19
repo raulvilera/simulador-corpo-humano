@@ -331,6 +331,8 @@
           <button id="lupaListaBtn" title="Mostrar ou ocultar a lista de estruturas">☰ Lista</button>
           <button id="lupaCorte" title="Cortar ao meio">✂️ Corte</button>
           <button id="lupaRot" class="ativo" title="Mostrar nomes com setas">🏷️ Rótulos</button>
+          <button id="lupaExpl" class="ativo" title="Mostrar ou ocultar a explicação">💡 Explicação</button>
+          <button id="lupaCheia" title="Ver o órgão em tela cheia">⛶ Tela cheia</button>
           <button id="lupaFechar" title="Voltar ao corpo">✕ Voltar ao corpo</button>
         </div>
       </div>
@@ -345,6 +347,25 @@
     const btL = div.querySelector("#lupaListaBtn"), lista = v => { div.classList.toggle("sem-lista", !v); btL.classList.toggle("ativo", v); redim(); };
     btL.onclick = () => lista(div.classList.contains("sem-lista"));
     div._lista = lista;
+    // Tela cheia da lupa: o órgão ocupa a tela toda; a explicação fica flutuando por cima e pode ser escondida
+    const btC = div.querySelector("#lupaCheia"); let listaAntes = false;
+    function telaCheia(lig) {
+      if (div.classList.contains("lupa-cheia") === lig) return;
+      div.classList.toggle("lupa-cheia", lig); btC.classList.toggle("ativo", lig);
+      btC.textContent = lig ? "✕ Sair" : "⛶ Tela cheia"; btC.title = lig ? "Sair da tela cheia" : "Ver o órgão em tela cheia";
+      if (lig) {
+        listaAntes = !div.classList.contains("sem-lista"); lista(false);
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => { });
+      } else {
+        if (listaAntes) lista(true);
+        if (document.fullscreenElement && !document.body.classList.contains("foco") && document.exitFullscreen) document.exitFullscreen().catch(() => { });
+      }
+      setTimeout(redim, 150);
+    }
+    div._telaCheia = telaCheia;
+    btC.onclick = () => telaCheia(!div.classList.contains("lupa-cheia"));
+    div.querySelector("#lupaExpl").onclick = e => { const oculta = div.classList.toggle("demo-oculta"); e.currentTarget.classList.toggle("ativo", !oculta); setTimeout(redim, 60); };
+    document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && div.classList.contains("lupa-cheia")) telaCheia(false); setTimeout(redim, 150); });
     div.querySelector("#lupaCorte").onclick = e => { ctx.corte = !ctx.corte; e.currentTarget.classList.toggle("ativo", ctx.corte); aplicarCorte(); };
     div.querySelector("#lupaRot").onclick = e => { ctx.rotulos = !ctx.rotulos; e.currentTarget.classList.toggle("ativo", ctx.rotulos); document.getElementById("lupaRotulos").hidden = !ctx.rotulos; zoomRotulos(); };
     return div;
@@ -500,7 +521,7 @@
     }
     selecionar(parte || org, true, !parte);   // ao abrir, mostra a ficha sem realçar (as cores do modelo ficam visíveis)
   }
-  function fechar() { if (ctx) ctx.div.hidden = true; document.body.classList.remove("lupa-aberta"); }
+  function fechar() { if (ctx && ctx.div._telaCheia) ctx.div._telaCheia(false); if (ctx) ctx.div.hidden = true; document.body.classList.remove("lupa-aberta"); }
 
   function partesDe(org) {
     const D = window.DADOS.estruturas; const ids = new Set(ctx.malhas.map(m => m.userData.id));
