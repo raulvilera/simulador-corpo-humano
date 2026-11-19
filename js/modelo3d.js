@@ -221,7 +221,6 @@ window.construirCorpo = async function (aoProgresso) {
     const dados = await descomprimir(pacote.dados);
     for (const c of pacote.cab) {
       const geo = geometria(c, dados), nomear = sist === "esqueletico" && OSSOS[c.id + ":" + c.mat];
-      if (c.id === "pele" && c.grupo === "fem" && !c.piv) corpoAtletico(geo);
       for (const [id, g] of nomear ? dividir(geo, nomear) : [[c.id, geo]]) {
       const musc = MUSCULOS_NO_OSSO.has(id), sis = musc ? "muscular" : sist;
       const mesh = new T.Mesh(g, material(id, musc ? "musculo" : c.mat));
@@ -716,6 +715,103 @@ window.construirCorpo = async function (aoProgresso) {
   refs.hipofise = mats.hipofise; refs.hipotalamo = mats.hipotalamo;
   refs.gonadasF = mats.ovarios; refs.gonadasM = mats.testiculos;
   refs.fem.visible = true; refs.masc.visible = false;
+
+  /* --------- MANEQUIM FEMININO ATLÉTICO ---------
+     O corpo feminino passa a usar a mesma superfície do masculino (atlética e bem definida, ajustada aos
+     músculos e ao esqueleto do modelo), com as formas femininas: mamas, quadril um pouco mais largo,
+     cintura mais fina e a região genital externa feminina (a masculina é retirada e a abertura é fechada). */
+  (function () {
+    const fem = pecas.find(m => m.userData.id === "pele" && m.parent && m.parent.name === "feminino" && !m.parent.userData.pivo);
+    const masc = pecas.find(m => m.userData.id === "pele" && m.parent && m.parent.name === "masculino" && !m.parent.userData.pivo);
+    if (!fem || !masc) return;
+    raiz.updateMatrixWorld(true);
+    const suave = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    // 1) superfície masculina, com os pontos repetidos (costuras) unidos
+    const g0 = masc.geometry.clone(); g0.applyMatrix4(masc.matrixWorld);
+    const p0 = g0.attributes.position, mapa = new Map(), P = [], idx = [];
+    const un = new Int32Array(p0.count);
+    for (let i = 0; i < p0.count; i++) { const k = Math.round(p0.getX(i) * 500) + "," + Math.round(p0.getY(i) * 500) + "," + Math.round(p0.getZ(i) * 500); let u = mapa.get(k); if (u === undefined) { u = P.length / 3; mapa.set(k, u); P.push(p0.getX(i), p0.getY(i), p0.getZ(i)); } un[i] = u; }
+    const I0 = g0.index.array;
+    // 2) retira os genitais masculinos e fecha a abertura com um leque
+    const gen = (x, y, z) => Math.abs(x) < 0.4 && y > 7.35 && y < 8.72 && z > 0.5;
+    const arestas = new Map(), tris = [];
+    for (let t = 0; t < I0.length; t += 3) {
+      const a = un[I0[t]], b = un[I0[t + 1]], c = un[I0[t + 2]];
+      const cx = (P[a * 3] + P[b * 3] + P[c * 3]) / 3, cy = (P[a * 3 + 1] + P[b * 3 + 1] + P[c * 3 + 1]) / 3, cz = (P[a * 3 + 2] + P[b * 3 + 2] + P[c * 3 + 2]) / 3;
+      if (gen(cx, cy, cz)) { [[a, b], [b, c], [c, a]].forEach(([x, y]) => arestas.set(x + "_" + y, [x, y])); continue; }
+      tris.push(a, b, c);
+    }
+    const ficam = new Set(); for (let t = 0; t < tris.length; t += 3) { ficam.add(tris[t] + "_" + tris[t + 1]); ficam.add(tris[t + 1] + "_" + tris[t + 2]); ficam.add(tris[t + 2] + "_" + tris[t]); }
+    const borda = []; arestas.forEach(([x, y]) => { if (ficam.has(y + "_" + x)) borda.push([x, y]); });   // aresta de fronteira, no sentido do triângulo retirado
+    const novos = new Set();
+    if (borda.length) {
+      const c = P.length / 3; let sx = 0, sy = 0, sz = 0; borda.forEach(([x]) => { sx += P[x * 3]; sy += P[x * 3 + 1]; sz += P[x * 3 + 2]; });
+      P.push(sx / borda.length, sy / borda.length + 0.05, sz / borda.length + 0.04); novos.add(c);
+      borda.forEach(([x, y]) => { tris.push(x, y, c); novos.add(x); novos.add(y); });
+    }
+    const nu = P.length / 3, viz = Array.from({ length: nu }, () => []);
+    for (let t = 0; t < tris.length; t += 3) { const a = tris[t], b = tris[t + 1], c = tris[t + 2]; viz[a].push(b, c); viz[b].push(a, c); viz[c].push(a, b); }
+    // 3) deslocamentos: quadril, cintura e mamas
+    const D = new Float32Array(nu * 3);
+    const MAMAS = [[0.6, 12.28], [-0.6, 12.28]];
+    for (let u = 0; u < nu; u++) {
+      const x = P[u * 3], y = P[u * 3 + 1], z = P[u * 3 + 2], ax = Math.abs(x);
+      const tronco = 1 - suave(1.35, 1.65, ax);
+      const quadril = 0.12 * suave(7.6, 8.5, y) * (1 - suave(9.3, 9.9, y)), cintura = -0.1 * suave(9.8, 10.4, y) * (1 - suave(11.0, 11.7, y));
+      const ombro = 0 * suave(12.6, 13.3, y) * (1 - suave(13.8, 14.1, y));
+      D[u * 3] = x * ((quadril + cintura) * tronco + ombro);
+    }
+    // 4) suaviza: o deslocamento todo um pouco e, na região genital refeita, também a forma
+    let A = D;
+    for (let it = 0; it < 6; it++) { const B = new Float32Array(nu * 3); for (let k = 0; k < nu; k++) { const l = viz[k]; let sx = A[k * 3] * 2, sy = A[k * 3 + 1] * 2, sz = A[k * 3 + 2] * 2; for (const j of l) { sx += A[j * 3]; sy += A[j * 3 + 1]; sz += A[j * 3 + 2]; } const tt = l.length + 2; B[k * 3] = sx / tt; B[k * 3 + 1] = sy / tt; B[k * 3 + 2] = sz / tt; } A = B; }
+    for (let u = 0; u < nu; u++) { P[u * 3] += A[u * 3]; P[u * 3 + 1] += A[u * 3 + 1]; P[u * 3 + 2] += A[u * 3 + 2]; }
+    // mamas: volume arredondado na frente do tórax (depois da suavização, para manter a forma)
+    for (let u = 0; u < nu; u++) {
+      const x = P[u * 3], y = P[u * 3 + 1], z = P[u * 3 + 2]; if (z < 0.5) continue;
+      MAMAS.forEach(([mx, my]) => {
+        const d = Math.hypot((x - mx) / 0.58, (y - my) / (y < my ? 0.46 : 0.6)); if (d >= 1) return;
+        const k = Math.pow(1 - d * d, 1.4);
+        P[u * 3 + 2] += 0.55 * k; P[u * 3 + 1] -= 0.06 * k; P[u * 3] += 0.05 * k * Math.sign(mx);
+      });
+    }
+    const anel = new Set(novos); novos.forEach(u => viz[u].forEach(j => anel.add(j)));
+    for (let it = 0; it < 10; it++) anel.forEach(u => { const l = viz[u]; if (!l.length) return; let sx = 0, sy = 0, sz = 0; l.forEach(j => { sx += P[j * 3]; sy += P[j * 3 + 1]; sz += P[j * 3 + 2]; }); P[u * 3] = P[u * 3] * 0.4 + sx / l.length * 0.6; P[u * 3 + 1] = P[u * 3 + 1] * 0.4 + sy / l.length * 0.6; P[u * 3 + 2] = P[u * 3 + 2] * 0.4 + sz / l.length * 0.6; });
+    // cabeça feminina: a cabeça original do modelo feminino é mantida; o pescoço do corpo novo é ajustado a ela
+    const gf = fem.geometry.clone(); gf.applyMatrix4(fem.matrixWorld);
+    const CORTE = 14.5;
+    {
+      const pf = gf.attributes.position, C = 0.06, grade = new Map(), FP = [];
+      const ch = (x, y, z) => (Math.floor(x / C) + 512) + (Math.floor(y / C) + 512) * 1024 + (Math.floor(z / C) + 512) * 1048576;
+      for (let i = 0; i < pf.count; i++) { const y = pf.getY(i); if (y < 13.8 || y > 14.9) continue; const x = pf.getX(i), z = pf.getZ(i), k = ch(x, y, z); let l = grade.get(k); if (!l) grade.set(k, l = []); l.push(FP.length / 3); FP.push(x, y, z); }
+      const perto = (x, y, z) => { let best = -1, bd = 0.3 * 0.3; const cx = Math.floor(x / C), cy = Math.floor(y / C), cz = Math.floor(z / C);
+        for (let a = -5; a <= 5; a++) for (let b = -2; b <= 2; b++) for (let c = -5; c <= 5; c++) { const l = grade.get((cx + a + 512) + (cy + b + 512) * 1024 + (cz + c + 512) * 1048576); if (l) for (const id of l) { const dx = FP[id * 3] - x, dy = FP[id * 3 + 1] - y, dz = FP[id * 3 + 2] - z, d = dx * dx + dy * dy + dz * dz; if (d < bd) { bd = d; best = id; } } }
+        return best; };
+      const R = new Float32Array(nu * 3), W = new Float32Array(nu);
+      for (let u = 0; u < nu; u++) {
+        const x = P[u * 3], y = P[u * 3 + 1], z = P[u * 3 + 2]; if (y < 14.0 || Math.abs(x) > 0.9) continue;
+        const w = suave(14.0, 14.42, y); const id = perto(x, y, z); if (id < 0) continue;
+        // só na direção horizontal (o pescoço afina ou engrossa sem subir ou descer)
+        R[u * 3] = (FP[id * 3] - x) * w; R[u * 3 + 2] = (FP[id * 3 + 2] - z) * w; W[u] = 1;
+      }
+      let Q = R; for (let it = 0; it < 5; it++) { const B = new Float32Array(nu * 3); for (let k = 0; k < nu; k++) { if (!W[k]) continue; const l = viz[k]; let sx = Q[k * 3] * 2, sz = Q[k * 3 + 2] * 2, n = 2; for (const j of l) if (W[j]) { sx += Q[j * 3]; sz += Q[j * 3 + 2]; n++; } B[k * 3] = sx / n; B[k * 3 + 2] = sz / n; } Q = B; }
+      for (let u = 0; u < nu; u++) if (W[u]) { P[u * 3] += Q[u * 3]; P[u * 3 + 2] += Q[u * 3 + 2]; }
+    }
+    // tira a cabeça masculina do corpo novo
+    { const ok = []; for (let t = 0; t < tris.length; t += 3) { const a = tris[t], b = tris[t + 1], c = tris[t + 2]; const my = (P[a * 3 + 1] + P[b * 3 + 1] + P[c * 3 + 1]) / 3, mx = Math.abs(P[a * 3] + P[b * 3] + P[c * 3]) / 3; if (my > CORTE + 0.1 && (my > 15.0 || mx < 0.6)) continue; ok.push(a, b, c); } tris.length = 0; for (let i = 0; i < ok.length; i++) tris.push(ok[i]); }
+    // 5) monta a geometria nova (sem índices repetidos; normais suaves)
+    const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(P, 3)); g.setIndex(tris);
+    g.applyMatrix4(fem.matrixWorld.clone().invert()); g.computeVertexNormals(); g.computeBoundingBox(); g.computeBoundingSphere();
+    // malha só com a cabeça feminina original (de um pouco abaixo do corte, para cobrir a emenda)
+    { const pf = gf.attributes.position, I = gf.index.array, sel = []; for (let t = 0; t < I.length; t += 3) { const my = (pf.getY(I[t]) + pf.getY(I[t + 1]) + pf.getY(I[t + 2])) / 3, mx = Math.abs(pf.getX(I[t]) + pf.getX(I[t + 1]) + pf.getX(I[t + 2])) / 3; if (my > CORTE - 0.06 && (my > 15.0 || mx < 0.72)) sel.push(I[t], I[t + 1], I[t + 2]); }
+      const gc = new T.BufferGeometry(); gc.setAttribute("position", pf); if (gf.attributes.normal) gc.setAttribute("normal", gf.attributes.normal); gc.setIndex(sel); gc.applyMatrix4(fem.matrixWorld.clone().invert()); gc.computeVertexNormals(); gc.computeBoundingSphere();
+      const cab = new T.Mesh(gc, fem.material); cab.userData = Object.assign({}, fem.userData); cab.renderOrder = fem.renderOrder; fem.parent.add(cab); pecas.push(cab); }
+    fem.geometry.dispose(); fem.geometry = g;
+    // 6) o antebraço direito da pele fica num pivô (para o movimento do cotovelo) dentro do grupo masculino: passa a valer para os dois sexos
+    const pivo = pecas.find(m => m.userData.id === "pele" && m.parent && m.parent.userData.pivo);
+    if (pivo && masc.parent && masc.parent.parent) { const grp = pivo.parent; masc.parent.parent.add(grp); }
+    // 7) glândulas mamárias ajustadas ao novo volume das mamas (ficam por dentro da pele)
+    pecas.filter(m => m.userData.id === "mamas").forEach(m => { const p = m.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, 0.9 + (p.getZ(i) - 0.9) * 0.62); p.needsUpdate = true; m.geometry.computeVertexNormals(); m.geometry.computeBoundingSphere(); });
+  })();
 
   /* --------- terminações nervosas: as pontas livres dos nervos afinam e se abrem em ramúsculos ---------
      (antes os tubos terminavam "cortados", como se o nervo estivesse incompleto). Uma ponta é livre quando não
